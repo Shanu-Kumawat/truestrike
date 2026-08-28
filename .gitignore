@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Secrets - never commit
+.env
+.env.local
+
+# Local AI-agent working memory (per-machine, not shared via git)
+.agents/memory/
