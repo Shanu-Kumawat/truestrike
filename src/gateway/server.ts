@@ -1,9 +1,17 @@
-import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { Server, IncomingMessage } from 'node:http';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { AuthorizationLedger, JsonlAuditWriter } from './authorizations.js';
+
+const MAX_BODY_BYTES = 1024 * 1024;
+
+const sessions = new Map<
+  string,
+  { mcpServer: McpServer; transport: StreamableHTTPServerTransport }
+>();
 
 const GATEWAY_INSTRUCTIONS = [
   'TrueStrike intrusive-action gateway.',
@@ -16,13 +24,16 @@ const GATEWAY_INSTRUCTIONS = [
   'authorizationId, and never reuse one.',
 ].join('\n');
 
-export function buildGatewayMcpServer(ledger: AuthorizationLedger): McpServer {
-  const server = new McpServer(
+/**
+ * authorization ledger is shared across sessions.
+ */
+export function createGatewayMcpServer(ledger: AuthorizationLedger): McpServer {
+  const mcpServer = new McpServer(
     { name: 'truestrike-gateway', version: '0.1.0' },
     { instructions: GATEWAY_INSTRUCTIONS },
   );
 
-  server.registerTool(
+  mcpServer.registerTool(
     'request_intrusive_approval',
     {
       title: 'Request approval for an intrusive action',
@@ -54,7 +65,7 @@ export function buildGatewayMcpServer(ledger: AuthorizationLedger): McpServer {
     },
   );
 
-  server.registerTool(
+  mcpServer.registerTool(
     'record_exploit_outcome',
     {
       title: 'Record the outcome of an approved intrusive action',
@@ -87,7 +98,56 @@ export function buildGatewayMcpServer(ledger: AuthorizationLedger): McpServer {
     },
   );
 
-  return server;
+  return mcpServer;
+}
+
+/**
+ * Builds one MCP server + transport pair for a single HTTP client session;
+ * the authorization ledger is shared across sessions.
+ */
+export function createGatewaySession(ledger: AuthorizationLedger): {
+  mcpServer: McpServer;
+  transport: StreamableHTTPServerTransport;
+} {
+  const mcpServer = createGatewayMcpServer(ledger);
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    enableJsonResponse: true,
+    onsessionclosed: (sessionId) => {
+      sessions.delete(sessionId);
+    },
+  });
+
+  void mcpServer
+    .connect(
+      // SDK type artifact under exactOptionalPropertyTypes: the transport's
+      // optional event handlers are assignable at runtime.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      transport as any,
+    )
+    .catch(() => {
+      sessions.delete(transport.sessionId ?? '');
+    });
+
+  return { mcpServer, transport };
+}
+
+function readBody(req: IncomingMessage): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        resolve(undefined);
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => resolve(undefined));
+  });
 }
 
 export interface GatewayHandle {
@@ -100,49 +160,77 @@ export async function startGatewayServer(
   port: number,
   auditLogPath: string,
 ): Promise<GatewayHandle> {
-  const ledger = new AuthorizationLedger(new JsonlAuditWriter(auditLogPath));
-  const mcpServer = buildGatewayMcpServer(ledger);
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-    enableJsonResponse: true,
-  });
-  await mcpServer.connect(
-    // SDK type artifact under exactOptionalPropertyTypes: the transport's
-    // optional event handlers are assignable at runtime.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transport as any,
+  const ledger = await AuthorizationLedger.restore(
+    new JsonlAuditWriter(auditLogPath),
+    auditLogPath,
   );
 
   const httpServer = createServer((req, res) => {
-    if (req.method !== 'POST' || req.url !== '/mcp') {
-      res.writeHead(405, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'method or path not allowed' }));
-      return;
-    }
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => {
-      let parsedBody: unknown;
-      try {
-        parsedBody = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      } catch {
-        res.writeHead(400, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid JSON body' }));
+    const sessionIdHeader = req.headers['mcp-session-id'];
+    const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
+
+    if (req.method === 'POST') {
+      const session = sessionId ? sessions.get(sessionId) : undefined;
+      if (sessionId && !session) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'session not found' }));
         return;
       }
-      void transport.handleRequest(req, res, parsedBody).catch(() => {
+      void readBody(req).then(async (body) => {
+        if (body === undefined) {
+          if (!res.headersSent) {
+            res.writeHead(413, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: 'request body too large or unreadable' }));
+          }
+          return;
+        }
+        let parsedBody: unknown;
+        try {
+          parsedBody = JSON.parse(body);
+        } catch {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid JSON body' }));
+          return;
+        }
+        try {
+          if (session) {
+            await session.transport.handleRequest(req, res, parsedBody);
+            return;
+          }
+          // No session id: this must be an initialize request; open a session.
+          const created = createGatewaySession(ledger);
+          await created.transport.handleRequest(req, res, parsedBody);
+          if (created.transport.sessionId) {
+            sessions.set(created.transport.sessionId, created);
+          }
+        } catch {
+          if (!res.headersSent) {
+            res.writeHead(500, { 'content-type': 'application/json' });
+          }
+          res.end(JSON.stringify({ error: 'gateway failure' }));
+        }
+      });
+      return;
+    }
+
+    if (req.method === 'GET' || req.method === 'DELETE') {
+      const session = sessionId ? sessions.get(sessionId) : undefined;
+      if (!session) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'session not found' }));
+        return;
+      }
+      void session.transport.handleRequest(req, res).catch(() => {
         if (!res.headersSent) {
           res.writeHead(500, { 'content-type': 'application/json' });
         }
         res.end(JSON.stringify({ error: 'gateway failure' }));
       });
-    });
-    req.on('error', () => {
-      if (!res.headersSent) {
-        res.writeHead(400);
-      }
-      res.end();
-    });
+      return;
+    }
+
+    res.writeHead(405, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'method not allowed' }));
   });
 
   return await new Promise((resolve, reject) => {
@@ -152,8 +240,11 @@ export async function startGatewayServer(
         server: httpServer,
         port,
         close: async () => {
-          await transport.close();
-          await mcpServer.close();
+          for (const session of sessions.values()) {
+            await session.transport.close();
+            await session.mcpServer.close();
+          }
+          sessions.clear();
           await new Promise<void>((resolveClose) => httpServer.close(() => resolveClose()));
         },
       });

@@ -2,13 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { buildGatewayMcpServer } from '../../src/gateway/server.js';
-import {
-  AuthorizationLedger,
-  type AuditSink,
-  type OutcomeRecord,
-  type ApprovalRecord,
-} from '../../src/gateway/authorizations.js';
+import { createGatewayMcpServer } from '../../src/gateway/server.js';
+import { AuthorizationLedger } from '../../src/gateway/authorizations.js';
+import type { ApprovalRecord, AuditSink, OutcomeRecord } from '../../src/gateway/authorizations.js';
 
 class CollectingSink implements AuditSink {
   readonly records: (ApprovalRecord | OutcomeRecord)[] = [];
@@ -25,10 +21,10 @@ function textOf(result: CallToolResult): string {
 async function connectClient(): Promise<{ client: Client; sink: CollectingSink }> {
   const sink = new CollectingSink();
   const ledger = new AuthorizationLedger(sink);
-  const server = buildGatewayMcpServer(ledger);
+  const mcpServer = createGatewayMcpServer(ledger);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test-client', version: '0.0.1' });
-  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  await Promise.all([mcpServer.connect(serverTransport), client.connect(clientTransport)]);
   return { client, sink };
 }
 

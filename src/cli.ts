@@ -2,7 +2,7 @@ import { TrueForge, isEventDelta, mergeEventDelta } from '@truefoundry/trueforge
 import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
-import { loadConfig } from './config.js';
+import { loadConfig, loadDotEnv } from './config.js';
 import { buildScanSpec } from './agent/spec.js';
 import { buildApprovalInput, collectPendingCalls, describePendingCall } from './agent/approvals.js';
 import type { PendingCall } from './agent/approvals.js';
@@ -30,9 +30,13 @@ export interface GatewayOptions {
 }
 
 export function loadGatewayOptions(env: NodeJS.ProcessEnv = process.env): GatewayOptions {
-  const port = Number.parseInt(env.TRUESTRIKE_GATEWAY_PORT ?? '8815', 10);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid TRUESTRIKE_GATEWAY_PORT: "${env.TRUESTRIKE_GATEWAY_PORT ?? ''}"`);
+  const rawPort = env.TRUESTRIKE_GATEWAY_PORT ?? '8815';
+  if (!/^\d+$/.test(rawPort)) {
+    throw new Error(`Invalid TRUESTRIKE_GATEWAY_PORT: "${rawPort}"`);
+  }
+  const port = Number.parseInt(rawPort, 10);
+  if (port < 1 || port > 65535) {
+    throw new Error(`Invalid TRUESTRIKE_GATEWAY_PORT: "${rawPort}"`);
   }
   return {
     port,
@@ -41,6 +45,7 @@ export function loadGatewayOptions(env: NodeJS.ProcessEnv = process.env): Gatewa
 }
 
 export async function runGateway(): Promise<number> {
+  loadDotEnv();
   const { startGatewayServer } = await import('./gateway/server.js');
   const options = loadGatewayOptions();
   const handle = await startGatewayServer(options.port, options.auditLogPath);
