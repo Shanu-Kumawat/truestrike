@@ -28,7 +28,13 @@ async function runScan(targetUrl: string): Promise<number> {
   console.log(`Connecting to TrueForge at ${config.baseUrl} (model: ${config.model})\n`);
 
   const { data: session } = await client.sessions.create({
-    agent: { spec: buildScanSpec(target, config.model) },
+    agent: {
+      spec: buildScanSpec(target, {
+        model: config.model,
+        sandbox: config.sandbox,
+        mcpServers: config.mcpServers,
+      }),
+    },
   });
   console.log(`Session: ${session.id}\n`);
 

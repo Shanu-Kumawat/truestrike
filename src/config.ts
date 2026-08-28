@@ -7,6 +7,17 @@ export interface TrueStrikeConfig {
   model: string;
   /** Extra authorized target hostnames beyond loopback (comma-separated in env). */
   extraAllowedHosts: string[];
+  /** Enable the Daytona sandbox for the agent (default: on). */
+  sandbox: boolean;
+  /** MCP server names configured on the TrueForge server to attach (comma-separated). */
+  mcpServers: string[];
+}
+
+function parseBool(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value.trim() === '') {
+    return fallback;
+  }
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 }
 
 /**
@@ -36,6 +47,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConf
     extraAllowedHosts: (env.TRUESTRIKE_ALLOW_HOSTS ?? '')
       .split(',')
       .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+    sandbox: parseBool(env.TRUESTRIKE_SANDBOX, true),
+    mcpServers: (env.TRUESTRIKE_MCP_SERVERS ?? '')
+      .split(',')
+      .map((s) => s.trim())
       .filter(Boolean),
   };
 }
