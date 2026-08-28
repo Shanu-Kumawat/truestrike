@@ -17,15 +17,21 @@ describe('validateTarget', () => {
   });
 
   it('allows hosts explicitly added to the allowlist', () => {
-    expect(validateTarget('http://juice-shop.internal:3000', ['juice-shop.internal'])).toBe(
-      'http://juice-shop.internal:3000/',
+    // Fictional placeholder host; the demo target is always local Juice Shop.
+    expect(validateTarget('http://authorized-target.test:3000', ['authorized-target.test'])).toBe(
+      'http://authorized-target.test:3000/',
     );
   });
 
   it('is case-insensitive for allowlisted hosts', () => {
-    expect(validateTarget('http://Juice-Shop.INTERNAL:3000', ['juice-shop.internal'])).toBe(
-      'http://juice-shop.internal:3000/',
+    expect(validateTarget('http://Authorized-Target.TEST:3000', ['authorized-target.test'])).toBe(
+      'http://authorized-target.test:3000/',
     );
+  });
+
+  it('rejects targets with embedded credentials', () => {
+    expect(() => validateTarget('http://user:pass@localhost:3000')).toThrow(TargetScopeError);
+    expect(() => validateTarget('http://user:pass@localhost:3000')).toThrow(/credentials/);
   });
 
   it('rejects non-http protocols', () => {

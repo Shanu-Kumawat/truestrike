@@ -33,6 +33,13 @@ export function validateTarget(rawTarget: string, extraAllowedHosts: string[] = 
     );
   }
 
+  if (url.username || url.password) {
+    throw new TargetScopeError(
+      'Target URLs must not embed credentials (user:password@host). ' +
+        'Credentials would leak into logs, agent instructions, and session history.',
+    );
+  }
+
   const host = url.hostname.toLowerCase();
   const allowed = LOOPBACK_HOSTS.has(host) || extraAllowedHosts.includes(host);
   if (!allowed) {

@@ -34,6 +34,7 @@ async function runScan(targetUrl: string): Promise<number> {
 
   const events = new Map<string, TrueForgeApi.TurnStreamingEvent>();
   let exitCode = 0;
+  let streamedAssistantText = false;
 
   const stream = await client.sessions.createTurnStream(session.id, {
     input: [
@@ -51,6 +52,9 @@ async function runScan(targetUrl: string): Promise<number> {
         mergeEventDelta(base, event);
       }
       if (event.type === 'model.message.delta' && event.threadId === 'main') {
+        if (event.content) {
+          streamedAssistantText = true;
+        }
         process.stdout.write(event.content ?? '');
       }
       continue;
@@ -81,7 +85,8 @@ async function runScan(targetUrl: string): Promise<number> {
         const state = event.state;
         console.log(`\n\nTurn finished: ${state.status}`);
         if (state.status === 'done') {
-          if (state.output) {
+          // The reply already streamed via deltas; only print when it did not.
+          if (state.output && !streamedAssistantText) {
             console.log(`\n${state.output.content ?? ''}`);
           }
           if (state.metrics) {
@@ -90,6 +95,10 @@ async function runScan(targetUrl: string): Promise<number> {
                 `cost: $${state.metrics.totalCostInUsd ?? '?'})`,
             );
           }
+        }
+        if (state.status === 'cancelled') {
+          console.error(`Turn cancelled: ${state.reason}`);
+          exitCode = 1;
         }
         if (state.status === 'error') {
           console.error(`Turn error: ${state.message}`);

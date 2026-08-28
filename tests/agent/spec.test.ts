@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScanSpec } from '../src/agent/spec.js';
+import { buildScanSpec } from '../../src/agent/spec.js';
 
 describe('buildScanSpec', () => {
   const spec = buildScanSpec('http://localhost:3000/', 'openai/gpt-5');
