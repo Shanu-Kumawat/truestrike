@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "truestrike": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint .",
@@ -22,8 +23,12 @@
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@truefoundry/trueforge-sdk": "^0.1.3"
   }
 }

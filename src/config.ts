@@ -1,0 +1,41 @@
+export interface TrueStrikeConfig {
+  /** TrueForge server base URL. */
+  baseUrl: string;
+  /** Optional OIDC ID token (hosted servers only; local mode needs none). */
+  token: string | undefined;
+  /** Model to run the agent on, in "provider/model" form (e.g. "openai/gpt-5"). */
+  model: string;
+  /** Extra authorized target hostnames beyond loopback (comma-separated in env). */
+  extraAllowedHosts: string[];
+}
+
+/**
+ * Loads configuration from the environment (`.env` in cwd is read when present).
+ * Throws with an actionable message when a required value is missing.
+ */
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConfig {
+  try {
+    // Node >= 20.12: loads .env without a dependency. Missing file is fine.
+    process.loadEnvFile();
+  } catch {
+    // no .env present; rely on real environment
+  }
+
+  const model = env.TRUESTRIKE_MODEL?.trim();
+  if (!model) {
+    throw new Error(
+      'TRUESTRIKE_MODEL is not set. Set it to a model configured on your TrueForge ' +
+        'server, e.g. TRUESTRIKE_MODEL=openai/gpt-5 (see .env.example).',
+    );
+  }
+
+  return {
+    baseUrl: env.TRUEFORGE_BASE_URL?.trim() || 'http://localhost:8790',
+    token: env.TRUEFORGE_TOKEN?.trim() || undefined,
+    model,
+    extraAllowedHosts: (env.TRUESTRIKE_ALLOW_HOSTS ?? '')
+      .split(',')
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+  };
+}

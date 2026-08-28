@@ -21,7 +21,14 @@ cp .env.example .env   # fill in your keys - never commit .env
 pnpm check             # typecheck + lint + format + tests
 ```
 
-CLI usage and demo instructions land with the first milestones.
+```bash
+# with TrueForge running (npx @truefoundry/trueforge) and a model provider
+# configured in its Settings > Models:
+pnpm truestrike scan http://localhost:3000
+```
+
+Scope is locked to loopback targets by default (the local Juice Shop demo);
+extend it only via `TRUESTRIKE_ALLOW_HOSTS`.
 
 ## Safety
 
