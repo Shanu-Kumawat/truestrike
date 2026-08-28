@@ -13,11 +13,24 @@ export interface TrueStrikeConfig {
   mcpServers: string[];
 }
 
-function parseBool(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value.trim() === '') {
+const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const FALSE_VALUES = new Set(['0', 'false', 'no', 'off']);
+
+function parseStrictBool(name: string, value: string | undefined, fallback: boolean): boolean {
+  const trimmed = value?.trim().toLowerCase();
+  if (trimmed === undefined || trimmed === '') {
     return fallback;
   }
-  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+  if (TRUE_VALUES.has(trimmed)) {
+    return true;
+  }
+  if (FALSE_VALUES.has(trimmed)) {
+    return false;
+  }
+  throw new Error(
+    `Invalid value for ${name}: "${value}". ` +
+      `Use one of: ${[...TRUE_VALUES, ...FALSE_VALUES].join(', ')}.`,
+  );
 }
 
 /**
@@ -48,7 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConf
       .split(',')
       .map((h) => h.trim().toLowerCase())
       .filter(Boolean),
-    sandbox: parseBool(env.TRUESTRIKE_SANDBOX, true),
+    sandbox: parseStrictBool('TRUESTRIKE_SANDBOX', env.TRUESTRIKE_SANDBOX, true),
     mcpServers: (env.TRUESTRIKE_MCP_SERVERS ?? '')
       .split(',')
       .map((s) => s.trim())
