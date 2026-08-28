@@ -34,16 +34,23 @@ function parseStrictBool(name: string, value: string | undefined, fallback: bool
 }
 
 /**
- * Loads configuration from the environment (`.env` in cwd is read when present).
- * Throws with an actionable message when a required value is missing.
+ * Loads `.env` from cwd when present. Missing file is fine.
  */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConfig {
+export function loadDotEnv(): void {
   try {
-    // Node >= 20.12: loads .env without a dependency. Missing file is fine.
+    // Node >= 20.12: loads .env without a dependency.
     process.loadEnvFile();
   } catch {
     // no .env present; rely on real environment
   }
+}
+
+/**
+ * Loads configuration from the environment (`.env` in cwd is read when present).
+ * Throws with an actionable message when a required value is missing.
+ */
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConfig {
+  loadDotEnv();
 
   const model = env.TRUESTRIKE_MODEL?.trim();
   if (!model) {
