@@ -9,3 +9,6 @@ coverage/
 
 # Local AI-agent working memory (per-machine, not shared via git)
 .agents/memory/
+
+# TrueStrike runtime artifacts (gateway audit log, run state)
+.truestrike/

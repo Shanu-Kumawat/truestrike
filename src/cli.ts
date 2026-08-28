@@ -10,7 +10,8 @@ import { TargetScopeError, validateTarget } from './target.js';
 import { sanitizeForTerminal } from './terminal.js';
 
 export const USAGE = `Usage:
-  truestrike scan <target-url>
+  truestrike scan <target-url>    run a scan against the authorized target
+  truestrike gateway              start the exploit-gateway MCP server
 
 Environment:
   TRUESTRIKE_MODEL        model in provider/model form (required, e.g. openai/gpt-5)
@@ -19,14 +20,53 @@ Environment:
   TRUESTRIKE_ALLOW_HOSTS  comma-separated extra authorized hosts
   TRUESTRIKE_SANDBOX      enable the Daytona sandbox (default: 1)
   TRUESTRIKE_MCP_SERVERS  comma-separated MCP server names to attach
+  TRUESTRIKE_GATEWAY_PORT port for the gateway MCP server (default 8815)
+  TRUESTRIKE_AUDIT_LOG    gateway audit log path (default .truestrike/audit.jsonl)
 `;
 
-export function parseArgs(argv: string[]): { targetUrl: string } | { usage: true } {
+export interface GatewayOptions {
+  port: number;
+  auditLogPath: string;
+}
+
+export function loadGatewayOptions(env: NodeJS.ProcessEnv = process.env): GatewayOptions {
+  const port = Number.parseInt(env.TRUESTRIKE_GATEWAY_PORT ?? '8815', 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid TRUESTRIKE_GATEWAY_PORT: "${env.TRUESTRIKE_GATEWAY_PORT ?? ''}"`);
+  }
+  return {
+    port,
+    auditLogPath: env.TRUESTRIKE_AUDIT_LOG?.trim() || '.truestrike/audit.jsonl',
+  };
+}
+
+export async function runGateway(): Promise<number> {
+  const { startGatewayServer } = await import('./gateway/server.js');
+  const options = loadGatewayOptions();
+  const handle = await startGatewayServer(options.port, options.auditLogPath);
+  console.log(`Exploit-gateway MCP server listening on http://127.0.0.1:${handle.port}/mcp`);
+  console.log(`Audit log: ${options.auditLogPath}`);
+  console.log('Add this URL as an MCP connector in TrueForge (Settings > Connectors).');
+  const shutdown = async (): Promise<void> => {
+    await handle.close();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
+  return 0;
+}
+
+export function parseArgs(
+  argv: string[],
+): { command: 'scan'; targetUrl: string } | { command: 'gateway' } | { usage: true } {
   const [command, targetUrl] = argv;
+  if (command === 'gateway' && targetUrl === undefined) {
+    return { command: 'gateway' };
+  }
   if (command !== 'scan' || !targetUrl) {
     return { usage: true };
   }
-  return { targetUrl };
+  return { command: 'scan', targetUrl };
 }
 
 /** Operator decision callback: resolve one pending call to allow/deny. */
@@ -213,6 +253,14 @@ export async function main(argv: string[], decide?: DecisionFn): Promise<number>
   if ('usage' in parsed) {
     process.stderr.write(USAGE);
     return 2;
+  }
+  if (parsed.command === 'gateway') {
+    try {
+      return await runGateway();
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
   }
   try {
     return await runScan(parsed.targetUrl, decide);
