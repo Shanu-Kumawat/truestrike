@@ -7,6 +7,7 @@ import { buildScanSpec } from './agent/spec.js';
 import { buildApprovalInput, collectPendingCalls, describePendingCall } from './agent/approvals.js';
 import type { PendingCall } from './agent/approvals.js';
 import { TargetScopeError, validateTarget } from './target.js';
+import { sanitizeForTerminal } from './terminal.js';
 
 export const USAGE = `Usage:
   truestrike scan <target-url>
@@ -94,7 +95,9 @@ async function consumeStream(
         console.log(`\n[subagent finished] ${event.title ?? event.threadId}`);
         break;
       case 'tool.response':
-        console.log(`\n[tool result] ${String(event.content ?? '').slice(0, 200)}`);
+        console.log(
+          `\n[tool result] ${sanitizeForTerminal(String(event.content ?? '')).slice(0, 200)}`,
+        );
         break;
       case 'sandbox.created':
         console.log(`\n[sandbox provisioned] ${event.sandboxId}`);
@@ -169,21 +172,18 @@ export async function runScan(
       console.error('Turn cancelled');
       return 1;
     }
-    if (result.turnStatus === 'error' && result.pendingApprovals.length === 0) {
+    if (result.turnStatus === 'error') {
+      // Do not resume an errored turn, even if approval events were streamed
+      // before the failure; resuming is only defined for paused turns.
       console.error(`Turn error: ${result.errorMessage ?? 'unknown'}`);
       return 1;
     }
 
-    // A paused turn also ends with status 'done' (output null, required
-    // actions set); approvals were collected from tool.approval_required
-    // events during the stream. No pending approvals means the turn truly
-    // finished.
+    // A paused turn ends with status 'done' (output null, required actions
+    // set); approvals were collected from tool.approval_required events
+    // during the stream. No pending approvals means the turn truly finished.
     const pending = collectPendingCalls(result.pendingApprovals, result.eventIndex);
     if (pending.length === 0) {
-      if (result.turnStatus === 'error') {
-        console.error(`Turn error: ${result.errorMessage ?? 'unknown'}`);
-        return 1;
-      }
       if (result.metrics) {
         console.log(
           `\n(tokens: ${result.metrics.totalTokens ?? '?'}, ` +
@@ -196,7 +196,9 @@ export async function runScan(
     const approvals: TrueForgeApi.UserToolApprovalEvent[] = [];
     for (const call of pending) {
       const allow = await decide(call);
-      console.error(`${allow ? 'Approved' : 'Denied'}: ${describePendingCall(call)}`);
+      console.error(
+        `${allow ? 'Approved' : 'Denied'}: ${sanitizeForTerminal(describePendingCall(call))}`,
+      );
       approvals.push(buildApprovalInput(call, allow));
     }
     input = approvals;

@@ -74,7 +74,11 @@ a full Kali image - fast cold start, minimal attack surface of our own.
 ## Safety model
 
 1. **Scope allowlist** - the orchestrator instructions carry the authorized
-   target(s); the CLI validates the target before session creation.
+   target(s); the CLI validates the target before session creation. This gates
+   the initial target only: HTTP redirects or content-referenced hosts are NOT
+   covered by CLI validation. Enforcement for those belongs to sandbox egress
+   policy (Daytona network configuration); until that is in place, redirects
+   are a known limitation.
 2. **Isolation** - execution happens in an ephemeral Daytona sandbox, not on the
    operator's machine or network.
 3. **Approval before intrusive** - exploitation is gated; the operator sees the
