@@ -8,9 +8,15 @@ import { buildApprovalInput, collectPendingCalls, describePendingCall } from './
 import type { PendingCall } from './agent/approvals.js';
 import { TargetScopeError, validateTarget } from './target.js';
 import { sanitizeForTerminal } from './terminal.js';
+import { clearScanState, loadScanState, saveScanState, statePathFromEnv } from './session-store.js';
+import type { ScanState } from './session-store.js';
+
+type TrueForgeClient = TrueForge;
+type TurnStream = Awaited<ReturnType<TrueForgeClient['sessions']['createTurnStream']>>;
 
 export const USAGE = `Usage:
   truestrike scan <target-url>    run a scan against the authorized target
+  truestrike scan --resume        resume the previous scan after a disconnect
   truestrike gateway              start the exploit-gateway MCP server
 
 Environment:
@@ -22,7 +28,35 @@ Environment:
   TRUESTRIKE_MCP_SERVERS  comma-separated MCP server names to attach
   TRUESTRIKE_GATEWAY_PORT port for the gateway MCP server (default 8815)
   TRUESTRIKE_AUDIT_LOG    gateway audit log path (default .truestrike/audit.jsonl)
+  TRUESTRIKE_STATE_FILE   scan resume state path (default .truestrike/last-scan.json)
 `;
+
+export function parseArgs(
+  argv: string[],
+):
+  | { command: 'scan'; targetUrl?: string; resume: boolean }
+  | { command: 'gateway' }
+  | { usage: true } {
+  const [command, ...rest] = argv;
+  if (command === 'gateway' && rest.length === 0) {
+    return { command: 'gateway' };
+  }
+  if (command !== 'scan') {
+    return { usage: true };
+  }
+  const resume = rest.includes('--resume');
+  const positional = rest.filter((arg) => arg !== '--resume');
+  if (resume && positional.length > 0) {
+    return { usage: true };
+  }
+  if (positional.length === 1) {
+    return { command: 'scan', targetUrl: positional[0]!, resume: false };
+  }
+  if (resume) {
+    return { command: 'scan', resume: true };
+  }
+  return { usage: true };
+}
 
 export interface GatewayOptions {
   port: number;
@@ -61,28 +95,14 @@ export async function runGateway(): Promise<number> {
   return 0;
 }
 
-export function parseArgs(
-  argv: string[],
-): { command: 'scan'; targetUrl: string } | { command: 'gateway' } | { usage: true } {
-  const [command, targetUrl] = argv;
-  if (command === 'gateway' && targetUrl === undefined) {
-    return { command: 'gateway' };
-  }
-  if (command !== 'scan' || !targetUrl) {
-    return { usage: true };
-  }
-  return { command: 'scan', targetUrl };
-}
-
 /** Operator decision callback: resolve one pending call to allow/deny. */
 export type DecisionFn = (call: PendingCall) => Promise<boolean>;
 
 async function promptDecision(call: PendingCall): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
-    rl.write('');
     const answer = await rl.question(
-      `\n[approval required] ${describePendingCall(call)}\nApprove? [y/N] `,
+      `\n[approval required] ${sanitizeForTerminal(describePendingCall(call))}\nApprove? [y/N] `,
     );
     return ['y', 'yes'].includes(answer.trim().toLowerCase());
   } finally {
@@ -97,27 +117,81 @@ interface StreamResult {
   pendingApprovals: TrueForgeApi.ToolApprovalRequiredEvent[];
   streamedAssistantText: boolean;
   eventIndex: Map<string, TrueForgeApi.TurnStreamingEvent>;
+  turnId: string | undefined;
+  lastSequenceNumber: number;
 }
 
-async function consumeStream(
-  sessionId: string,
-  input: TrueForgeApi.TurnInputItem[],
-  client: TrueForge,
-): Promise<StreamResult> {
-  const result: StreamResult = {
+function emptyResult(): StreamResult {
+  return {
     turnStatus: 'done',
     errorMessage: undefined,
     metrics: undefined,
     pendingApprovals: [],
     streamedAssistantText: false,
     eventIndex: new Map(),
+    turnId: undefined,
+    lastSequenceNumber: 0,
   };
-  const events = result.eventIndex;
+}
 
-  const stream = await client.sessions.createTurnStream(sessionId, { input });
-  for await (const { data: event } of stream.withMetadata()) {
+function applyEvent(event: TrueForgeApi.TurnStreamingEvent, result: StreamResult): void {
+  result.eventIndex.set(event.id, event);
+
+  switch (event.type) {
+    case 'turn.created':
+      result.turnId = event.turnId;
+      break;
+    case 'thread.created':
+      console.log(`\n[subagent started] ${event.title}`);
+      break;
+    case 'thread.done':
+      console.log(`\n[subagent finished] ${event.title ?? event.threadId}`);
+      break;
+    case 'tool.response':
+      console.log(
+        `\n[tool result] ${sanitizeForTerminal(String(event.content ?? '')).slice(0, 200)}`,
+      );
+      break;
+    case 'sandbox.created':
+      console.log(`\n[sandbox provisioned] ${event.sandboxId}`);
+      break;
+    case 'mcp.auth_required':
+      console.log('\n[mcp auth required] authorize the listed servers, then resume');
+      break;
+    case 'tool.approval_required':
+      result.pendingApprovals.push(event);
+      break;
+    case 'turn.done': {
+      const state = event.state;
+      result.turnStatus = state.status;
+      if (state.status === 'done') {
+        // The reply already streamed via deltas; only print when it did not.
+        if (state.output && !result.streamedAssistantText) {
+          console.log(`\n${state.output.content ?? ''}`);
+        }
+        result.metrics = state.metrics;
+      }
+      if (state.status === 'error') {
+        result.errorMessage = state.message;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+async function consumeTurnStream(
+  stream: TurnStream,
+  onTurnCreated?: (turnId: string) => void,
+): Promise<StreamResult> {
+  const result = emptyResult();
+  for await (const { data: event, id } of stream.withMetadata()) {
+    if (id != null && Number.isFinite(Number(id))) {
+      result.lastSequenceNumber = Math.max(result.lastSequenceNumber, Number(id));
+    }
     if (isEventDelta(event)) {
-      const base = events.get(event.id);
+      const base = result.eventIndex.get(event.id);
       if (base) {
         mergeEventDelta(base, event);
       }
@@ -129,98 +203,109 @@ async function consumeStream(
       }
       continue;
     }
-
-    events.set(event.id, event);
-
-    switch (event.type) {
-      case 'thread.created':
-        console.log(`\n[subagent started] ${event.title}`);
-        break;
-      case 'thread.done':
-        console.log(`\n[subagent finished] ${event.title ?? event.threadId}`);
-        break;
-      case 'tool.response':
-        console.log(
-          `\n[tool result] ${sanitizeForTerminal(String(event.content ?? '')).slice(0, 200)}`,
-        );
-        break;
-      case 'sandbox.created':
-        console.log(`\n[sandbox provisioned] ${event.sandboxId}`);
-        break;
-      case 'mcp.auth_required':
-        console.log('\n[mcp auth required] authorize the listed servers, then resume');
-        break;
-      case 'tool.approval_required':
-        result.pendingApprovals.push(event);
-        break;
-      case 'turn.done': {
-        const state = event.state;
-        result.turnStatus = state.status;
-        if (state.status === 'done') {
-          // The reply already streamed via deltas; only print when it did not.
-          if (state.output && !result.streamedAssistantText) {
-            console.log(`\n${state.output.content ?? ''}`);
-          }
-          result.metrics = state.metrics;
-        }
-        if (state.status === 'error') {
-          result.errorMessage = state.message;
-        }
-        break;
-      }
-      default:
-        break;
+    applyEvent(event, result);
+    if (event.type === 'turn.created' && onTurnCreated && result.turnId !== undefined) {
+      onTurnCreated(result.turnId);
     }
   }
   return result;
 }
 
-export async function runScan(
-  targetUrl: string,
-  decide: DecisionFn = promptDecision,
+async function consumeCreatedTurn(
+  sessionId: string,
+  input: TrueForgeApi.TurnInputItem[],
+  client: TrueForgeClient,
+  onTurnCreated?: (turnId: string) => void,
+): Promise<StreamResult> {
+  const stream = await client.sessions.createTurnStream(sessionId, { input });
+  return consumeTurnStream(stream, onTurnCreated);
+}
+
+async function consumeSubscribedTurn(
+  sessionId: string,
+  turnId: string,
+  afterSequenceNumber: number,
+  client: TrueForgeClient,
+  onTurnCreated?: (turnId: string) => void,
+): Promise<StreamResult> {
+  const stream = await client.sessions.subscribeToTurn(
+    sessionId,
+    turnId,
+    { afterSequenceNumber },
+    { timeoutInSeconds: 600 },
+  );
+  return consumeTurnStream(stream, onTurnCreated);
+}
+
+/**
+ * Rebuilds a finished turn's result from the persisted event log (deltas are
+ * pre-merged by the server). Terminal state comes from the logged turn.done.
+ */
+async function rebuildFinishedTurn(
+  sessionId: string,
+  turnId: string,
+  client: TrueForgeClient,
+  onTurnCreated?: (turnId: string) => void,
+): Promise<StreamResult> {
+  const result = emptyResult();
+  for await (const event of await client.sessions.listTurnEvents(sessionId, turnId)) {
+    applyEvent(event, result);
+    if (event.type === 'turn.created' && onTurnCreated && result.turnId !== undefined) {
+      onTurnCreated(result.turnId);
+    }
+  }
+  return result;
+}
+
+const MAX_APPROVAL_ROUNDS = 25;
+
+/**
+ * Drives a scan turn to completion: consumes the first stream (fresh turn,
+ * subscribed turn, or rebuilt log), resolves approval pauses with new turns,
+ * and keeps the resume state file current throughout.
+ */
+async function driveScan(
+  sessionId: string,
+  target: string,
+  client: TrueForgeClient,
+  decide: DecisionFn,
+  firstTurn: (onTurnCreated: (turnId: string) => void) => Promise<StreamResult>,
 ): Promise<number> {
-  const config = loadConfig();
-  const target = validateTarget(targetUrl, config.extraAllowedHosts);
+  let input: TrueForgeApi.TurnInputItem[] | undefined;
 
-  const client = new TrueForge({
-    baseUrl: config.baseUrl,
-    timeoutInSeconds: 600,
-    ...(config.token ? { token: config.token } : {}),
-  });
+  // Persist as soon as the turn id is known (turn.created), not only after a
+  // turn completes, so a crash mid-first-turn is still resumable. The pending
+  // write is awaited before clearing so it cannot resurrect cleared state.
+  let pendingPersist: Promise<void> | undefined;
+  const persist = (turnId: string, lastSequenceNumber: number): Promise<void> =>
+    saveScanState({ sessionId, turnId, lastSequenceNumber, target });
+  const clearState = async (): Promise<void> => {
+    await pendingPersist;
+    await clearScanState();
+  };
 
-  console.log(`TrueStrike - authorized target: ${target}`);
-  console.log(`Connecting to TrueForge at ${config.baseUrl} (model: ${config.model})\n`);
-
-  const { data: session } = await client.sessions.create({
-    agent: {
-      spec: buildScanSpec(target, {
-        model: config.model,
-        sandbox: config.sandbox,
-        mcpServers: config.mcpServers,
-      }),
-    },
-  });
-  console.log(`Session: ${session.id}\n`);
-
-  let input: TrueForgeApi.TurnInputItem[] = [
-    {
-      type: 'user.message',
-      content: `Begin the security engagement for the authorized target ${target}.`,
-    },
-  ];
-
-  const MAX_APPROVAL_ROUNDS = 25;
   for (let round = 0; round < MAX_APPROVAL_ROUNDS; round++) {
-    const result = await consumeStream(session.id, input, client);
+    const onTurnCreated = (turnId: string): void => {
+      pendingPersist = persist(turnId, 0);
+    };
+    const result =
+      round === 0
+        ? await firstTurn(onTurnCreated)
+        : await consumeCreatedTurn(sessionId, input!, client, onTurnCreated);
+    if (round > 0 && result.turnId !== undefined) {
+      pendingPersist = persist(result.turnId, result.lastSequenceNumber);
+    }
 
     if (result.turnStatus === 'cancelled') {
       console.error('Turn cancelled');
+      await clearState();
       return 1;
     }
     if (result.turnStatus === 'error') {
       // Do not resume an errored turn, even if approval events were streamed
       // before the failure; resuming is only defined for paused turns.
       console.error(`Turn error: ${result.errorMessage ?? 'unknown'}`);
+      await clearState();
       return 1;
     }
 
@@ -235,6 +320,7 @@ export async function runScan(
             `cost: $${result.metrics.totalCostInUsd ?? '?'})`,
         );
       }
+      await clearState();
       return 0;
     }
 
@@ -250,7 +336,99 @@ export async function runScan(
   }
 
   console.error(`Aborting after ${MAX_APPROVAL_ROUNDS} approval rounds without completion`);
+  await clearState();
   return 1;
+}
+
+function createClient(config: { baseUrl: string; token: string | undefined }): TrueForgeClient {
+  return new TrueForge({
+    baseUrl: config.baseUrl,
+    timeoutInSeconds: 600,
+    ...(config.token ? { token: config.token } : {}),
+  });
+}
+
+export async function runScan(
+  targetUrl: string,
+  decide: DecisionFn = promptDecision,
+): Promise<number> {
+  const config = loadConfig();
+  const target = validateTarget(targetUrl, config.extraAllowedHosts);
+  const client = createClient(config);
+
+  console.log(`TrueStrike - authorized target: ${target}`);
+  console.log(`Connecting to TrueForge at ${config.baseUrl} (model: ${config.model})\n`);
+
+  const { data: session } = await client.sessions.create({
+    agent: {
+      spec: buildScanSpec(target, {
+        model: config.model,
+        sandbox: config.sandbox,
+        mcpServers: config.mcpServers,
+      }),
+    },
+  });
+  console.log(`Session: ${session.id}\n`);
+
+  const initialInput: TrueForgeApi.TurnInputItem[] = [
+    {
+      type: 'user.message',
+      content: `Begin the security engagement for the authorized target ${target}.`,
+    },
+  ];
+
+  return driveScan(session.id, target, client, decide, (onTurnCreated) =>
+    consumeCreatedTurn(session.id, initialInput, client, onTurnCreated),
+  );
+}
+
+export async function runResumedScan(decide: DecisionFn = promptDecision): Promise<number> {
+  loadDotEnv();
+  const state: ScanState | undefined = await loadScanState();
+  if (!state) {
+    console.error(
+      `No previous scan to resume (state file: ${statePathFromEnv()}). Start a fresh scan with: truestrike scan <target-url>`,
+    );
+    return 2;
+  }
+
+  const config = loadConfig();
+  const target = validateTarget(state.target, config.extraAllowedHosts);
+  const client = createClient(config);
+
+  console.log(`TrueStrike - resuming scan of ${target}`);
+  console.log(`Session: ${state.sessionId}, turn: ${state.turnId}\n`);
+
+  let turn: TrueForgeApi.Turn;
+  try {
+    const response = await client.sessions.getTurn(state.sessionId, state.turnId);
+    turn = response.data;
+  } catch (error) {
+    console.error(
+      `Previous scan is no longer reachable (${error instanceof Error ? error.message : String(error)}). ` +
+        'Start a fresh scan with: truestrike scan <target-url>',
+    );
+    await clearScanState();
+    return 1;
+  }
+
+  if (turn.state.status === 'running') {
+    console.log('Turn still running on the server; reconnecting to the event stream...\n');
+    return driveScan(state.sessionId, target, client, decide, (onTurnCreated) =>
+      consumeSubscribedTurn(
+        state.sessionId,
+        state.turnId,
+        state.lastSequenceNumber,
+        client,
+        onTurnCreated,
+      ),
+    );
+  }
+
+  console.log('Turn already finished; rebuilding from the event log...\n');
+  return driveScan(state.sessionId, target, client, decide, (onTurnCreated) =>
+    rebuildFinishedTurn(state.sessionId, state.turnId, client, onTurnCreated),
+  );
 }
 
 export async function main(argv: string[], decide?: DecisionFn): Promise<number> {
@@ -268,7 +446,10 @@ export async function main(argv: string[], decide?: DecisionFn): Promise<number>
     }
   }
   try {
-    return await runScan(parsed.targetUrl, decide);
+    if (parsed.resume) {
+      return await runResumedScan(decide);
+    }
+    return await runScan(parsed.targetUrl!, decide);
   } catch (error) {
     if (error instanceof TargetScopeError) {
       console.error(`Scope error: ${error.message}`);

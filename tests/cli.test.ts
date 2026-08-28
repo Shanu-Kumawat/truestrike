@@ -6,7 +6,16 @@ describe('parseArgs', () => {
     expect(parseArgs(['scan', 'http://localhost:3000'])).toEqual({
       command: 'scan',
       targetUrl: 'http://localhost:3000',
+      resume: false,
     });
+  });
+
+  it('parses the resume flag without a target', () => {
+    expect(parseArgs(['scan', '--resume'])).toEqual({ command: 'scan', resume: true });
+  });
+
+  it('rejects --resume combined with a target', () => {
+    expect(parseArgs(['scan', '--resume', 'http://localhost:3000'])).toEqual({ usage: true });
   });
 
   it('parses the gateway command without extra arguments', () => {
