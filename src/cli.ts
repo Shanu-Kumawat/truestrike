@@ -1,4 +1,9 @@
-import { TrueForge, isEventDelta, mergeEventDelta } from '@truefoundry/trueforge-sdk';
+import {
+  TrueForge,
+  TrueForgeError,
+  isEventDelta,
+  mergeEventDelta,
+} from '@truefoundry/trueforge-sdk';
 import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
@@ -184,8 +189,10 @@ function applyEvent(event: TrueForgeApi.TurnStreamingEvent, result: StreamResult
 async function consumeTurnStream(
   stream: TurnStream,
   onTurnCreated?: (turnId: string) => void,
+  onProgress?: (seq: number) => void,
 ): Promise<StreamResult> {
   const result = emptyResult();
+  let eventsSinceFlush = 0;
   for await (const { data: event, id } of stream.withMetadata()) {
     if (id != null && Number.isFinite(Number(id))) {
       result.lastSequenceNumber = Math.max(result.lastSequenceNumber, Number(id));
@@ -207,6 +214,11 @@ async function consumeTurnStream(
     if (event.type === 'turn.created' && onTurnCreated && result.turnId !== undefined) {
       onTurnCreated(result.turnId);
     }
+    eventsSinceFlush += 1;
+    if (onProgress && eventsSinceFlush >= CURSOR_FLUSH_INTERVAL) {
+      eventsSinceFlush = 0;
+      onProgress(result.lastSequenceNumber);
+    }
   }
   return result;
 }
@@ -216,9 +228,10 @@ async function consumeCreatedTurn(
   input: TrueForgeApi.TurnInputItem[],
   client: TrueForgeClient,
   onTurnCreated?: (turnId: string) => void,
+  onProgress?: (seq: number) => void,
 ): Promise<StreamResult> {
   const stream = await client.sessions.createTurnStream(sessionId, { input });
-  return consumeTurnStream(stream, onTurnCreated);
+  return consumeTurnStream(stream, onTurnCreated, onProgress);
 }
 
 async function consumeSubscribedTurn(
@@ -227,6 +240,7 @@ async function consumeSubscribedTurn(
   afterSequenceNumber: number,
   client: TrueForgeClient,
   onTurnCreated?: (turnId: string) => void,
+  onProgress?: (seq: number) => void,
 ): Promise<StreamResult> {
   const stream = await client.sessions.subscribeToTurn(
     sessionId,
@@ -234,21 +248,20 @@ async function consumeSubscribedTurn(
     { afterSequenceNumber },
     { timeoutInSeconds: 600 },
   );
-  return consumeTurnStream(stream, onTurnCreated);
+  return consumeTurnStream(stream, onTurnCreated, onProgress);
 }
 
 /**
- * Rebuilds a finished turn's result from the persisted event log (deltas are
+ * Rebuilds a finished turn's result from a persisted event log (deltas are
  * pre-merged by the server). Terminal state comes from the logged turn.done.
+ * Injectable iterable keeps this unit-testable without a live server.
  */
-async function rebuildFinishedTurn(
-  sessionId: string,
-  turnId: string,
-  client: TrueForgeClient,
+export async function rebuildTurnFromEvents(
+  events: AsyncIterable<TrueForgeApi.SessionEvent>,
   onTurnCreated?: (turnId: string) => void,
 ): Promise<StreamResult> {
   const result = emptyResult();
-  for await (const event of await client.sessions.listTurnEvents(sessionId, turnId)) {
+  for await (const event of events) {
     applyEvent(event, result);
     if (event.type === 'turn.created' && onTurnCreated && result.turnId !== undefined) {
       onTurnCreated(result.turnId);
@@ -258,6 +271,8 @@ async function rebuildFinishedTurn(
 }
 
 const MAX_APPROVAL_ROUNDS = 25;
+/** Persist the resume cursor every N stream events. */
+const CURSOR_FLUSH_INTERVAL = 20;
 
 /**
  * Drives a scan turn to completion: consumes the first stream (fresh turn,
@@ -269,32 +284,49 @@ async function driveScan(
   target: string,
   client: TrueForgeClient,
   decide: DecisionFn,
-  firstTurn: (onTurnCreated: (turnId: string) => void) => Promise<StreamResult>,
+  firstTurn: (
+    onTurnCreated: (turnId: string) => void,
+    onProgress: (seq: number) => void,
+  ) => Promise<StreamResult>,
 ): Promise<number> {
   let input: TrueForgeApi.TurnInputItem[] | undefined;
+  let activeTurnId: string | undefined;
 
-  // Persist as soon as the turn id is known (turn.created), not only after a
-  // turn completes, so a crash mid-first-turn is still resumable. The pending
-  // write is awaited before clearing so it cannot resurrect cleared state.
-  let pendingPersist: Promise<void> | undefined;
+  // Persist as soon as the turn id is known (turn.created) and flush the
+  // stream cursor periodically, so a crash mid-turn resumes close to where it
+  // stopped. Writes are chained (never concurrent) and awaited before
+  // clearing so an older write cannot resurrect cleared state.
+  let pendingPersist: Promise<void> = Promise.resolve();
   const persist = (turnId: string, lastSequenceNumber: number): Promise<void> =>
     saveScanState({ sessionId, turnId, lastSequenceNumber, target });
+  const queuePersist = (turnId: string, lastSequenceNumber: number): void => {
+    pendingPersist = pendingPersist
+      .then(() => persist(turnId, lastSequenceNumber))
+      .catch((error: unknown) => {
+        console.error(
+          `[warn] failed to persist resume state: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+  };
+  const onTurnCreated = (turnId: string): void => {
+    activeTurnId = turnId;
+    queuePersist(turnId, 0);
+  };
+  const onProgress = (seq: number): void => {
+    if (activeTurnId !== undefined) {
+      queuePersist(activeTurnId, seq);
+    }
+  };
   const clearState = async (): Promise<void> => {
     await pendingPersist;
     await clearScanState();
   };
 
   for (let round = 0; round < MAX_APPROVAL_ROUNDS; round++) {
-    const onTurnCreated = (turnId: string): void => {
-      pendingPersist = persist(turnId, 0);
-    };
     const result =
       round === 0
-        ? await firstTurn(onTurnCreated)
-        : await consumeCreatedTurn(sessionId, input!, client, onTurnCreated);
-    if (round > 0 && result.turnId !== undefined) {
-      pendingPersist = persist(result.turnId, result.lastSequenceNumber);
-    }
+        ? await firstTurn(onTurnCreated, onProgress)
+        : await consumeCreatedTurn(sessionId, input!, client, onTurnCreated, onProgress);
 
     if (result.turnStatus === 'cancelled') {
       console.error('Turn cancelled');
@@ -404,11 +436,21 @@ export async function runResumedScan(decide: DecisionFn = promptDecision): Promi
     const response = await client.sessions.getTurn(state.sessionId, state.turnId);
     turn = response.data;
   } catch (error) {
-    console.error(
-      `Previous scan is no longer reachable (${error instanceof Error ? error.message : String(error)}). ` +
-        'Start a fresh scan with: truestrike scan <target-url>',
-    );
-    await clearScanState();
+    // Only a gone session/turn invalidates the state file; transient
+    // failures (network, timeout, auth) must keep it resumable.
+    const isNotFound = error instanceof TrueForgeError && error.statusCode === 404;
+    if (isNotFound) {
+      console.error(
+        'Previous scan is no longer reachable (session or turn was deleted). ' +
+          'Start a fresh scan with: truestrike scan <target-url>',
+      );
+      await clearScanState();
+    } else {
+      console.error(
+        `Resume failed (${error instanceof Error ? error.message : String(error)}). ` +
+          'The scan state was kept; try `truestrike scan --resume` again.',
+      );
+    }
     return 1;
   }
 
@@ -426,8 +468,11 @@ export async function runResumedScan(decide: DecisionFn = promptDecision): Promi
   }
 
   console.log('Turn already finished; rebuilding from the event log...\n');
-  return driveScan(state.sessionId, target, client, decide, (onTurnCreated) =>
-    rebuildFinishedTurn(state.sessionId, state.turnId, client, onTurnCreated),
+  return driveScan(state.sessionId, target, client, decide, async (onTurnCreated) =>
+    rebuildTurnFromEvents(
+      await client.sessions.listTurnEvents(state.sessionId, state.turnId),
+      onTurnCreated,
+    ),
   );
 }
 
