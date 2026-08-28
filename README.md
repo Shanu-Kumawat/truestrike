@@ -27,8 +27,9 @@ pnpm check             # typecheck + lint + format + tests
 pnpm truestrike scan http://localhost:3000
 ```
 
-Scope is locked to loopback targets by default (the local Juice Shop demo);
-extend it only via `TRUESTRIKE_ALLOW_HOSTS`.
+Scope is locked to loopback targets by default (the local Juice Shop demo,
+see [docs/demo-target.md](docs/demo-target.md)); extend it only via
+`TRUESTRIKE_ALLOW_HOSTS`.
 
 ## Safety
 
