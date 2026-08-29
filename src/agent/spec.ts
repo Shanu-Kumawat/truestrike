@@ -3,8 +3,6 @@ import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 export interface ScanSpecOptions {
   /** Model in "provider/model" form. */
   model: string;
-  /** Enable the Daytona sandbox (required for skills and code execution). */
-  sandbox: boolean;
   /** Names of MCP servers configured on the TrueForge server (Settings > Connectors). */
   mcpServers: string[];
 }
@@ -50,7 +48,8 @@ export function buildInstructions(targetUrl: string): string {
     '2. VALIDATE. For each candidate weakness, build and execute a proof-of-concept',
     '   inside the sandbox that demonstrates the issue against the authorized target.',
     '   A finding without a working, reproducible PoC is a hypothesis, not a finding.',
-    '   Discard what you cannot demonstrate.',
+    '   Undemonstrated hypotheses are recorded in the report narrative only; they',
+    '   never enter findings.json.',
     '3. REPORT. Summarize only validated findings: what the weakness is, where it',
     '   lives, the exact PoC steps and evidence, the potential impact, and a concrete',
     '   remediation. Assign severity conservatively and justify it.',
@@ -70,9 +69,11 @@ export function buildInstructions(targetUrl: string): string {
     '     "remediation": "concrete fix", "status": "confirmed|probable"}]}',
     '',
     'Status "confirmed" requires a PoC that actually executed against the target.',
-    'Use "probable" only with strong supporting evidence, and state what is missing',
-    'to confirm. An engagement with no validated findings must still write both',
-    'files, with an empty findings array and an explicit statement of coverage.',
+    'Status "probable" requires a PoC that executed but did not conclusively',
+    'demonstrate impact, and must state what is missing. Guesses and undemonstrated',
+    'hypotheses must not appear in findings.json at all. An engagement with no',
+    'validated findings must still write both files, with an empty findings array',
+    'and an explicit statement of coverage.',
     '',
     '## Approval discipline (hard rule)',
     '',
@@ -126,7 +127,9 @@ export function buildScanSpec(targetUrl: string, options: ScanSpecOptions): True
     config: {
       iterationLimit: 60,
       dynamicSubAgents: { enabled: true },
-      sandbox: { enabled: options.sandbox },
+      // The sandbox is mandatory: all execution (tooling, PoCs, report
+      // artifacts) happens inside it, and skills require it.
+      sandbox: { enabled: true },
     },
   };
 }

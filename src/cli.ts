@@ -29,7 +29,6 @@ Environment:
   TRUEFORGE_BASE_URL      TrueForge server (default http://localhost:8790)
   TRUEFORGE_TOKEN         OIDC ID token (hosted servers only)
   TRUESTRIKE_ALLOW_HOSTS  comma-separated extra authorized hosts
-  TRUESTRIKE_SANDBOX      enable the Daytona sandbox (default: 1)
   TRUESTRIKE_MCP_SERVERS  comma-separated MCP server names to attach
   TRUESTRIKE_GATEWAY_PORT port for the gateway MCP server (default 8815)
   TRUESTRIKE_AUDIT_LOG    gateway audit log path (default .truestrike/audit.jsonl)
@@ -395,7 +394,6 @@ export async function runScan(
     agent: {
       spec: buildScanSpec(target, {
         model: config.model,
-        sandbox: config.sandbox,
         mcpServers: config.mcpServers,
       }),
     },

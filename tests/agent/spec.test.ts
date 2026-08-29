@@ -4,7 +4,6 @@ import { buildInstructions, buildScanSpec } from '../../src/agent/spec.js';
 describe('buildScanSpec', () => {
   const spec = buildScanSpec('http://localhost:3000/', {
     model: 'openai/gpt-5',
-    sandbox: true,
     mcpServers: ['truestrike-gateway'],
   });
 
@@ -50,7 +49,7 @@ describe('buildScanSpec', () => {
     expect(spec.instructions).toMatch(/denied/i);
   });
 
-  it('enables subagents, sandbox, and a sane iteration limit', () => {
+  it('enables subagents, the mandatory sandbox, and a sane iteration limit', () => {
     expect(spec.config?.dynamicSubAgents?.enabled).toBe(true);
     expect(spec.config?.sandbox?.enabled).toBe(true);
     expect(spec.config?.iterationLimit).toBeGreaterThan(10);
@@ -65,11 +64,10 @@ describe('buildScanSpec', () => {
   it('omits the mcpServers field when none are configured', () => {
     const bare = buildScanSpec('http://localhost:3000/', {
       model: 'openai/gpt-5',
-      sandbox: false,
       mcpServers: [],
     });
     expect(bare.mcpServers).toBeUndefined();
-    expect(bare.config?.sandbox?.enabled).toBe(false);
+    expect(bare.config?.sandbox?.enabled).toBe(true);
   });
 });
 
