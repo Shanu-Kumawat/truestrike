@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config.js';
+import { DEFAULT_SKILLS, loadConfig } from '../src/config.js';
 
 function env(overrides: Record<string, string>): NodeJS.ProcessEnv {
   return { ...overrides };
@@ -17,6 +17,7 @@ describe('loadConfig', () => {
     expect(config.extraAllowedHosts).toEqual([]);
     expect(config.mcpServers).toEqual([]);
     expect(config.auditLogPath).toBe('.truestrike/audit.jsonl');
+    expect(config.skills).toEqual(DEFAULT_SKILLS);
   });
 
   it('parses comma-separated allowlist and mcp server lists', () => {

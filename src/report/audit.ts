@@ -46,9 +46,19 @@ export async function loadAuditEntries(
     if (typeof record.authorizationId !== 'string') {
       continue;
     }
+    // Required fields only; anything malformed is skipped rather than
+    // crashing report rendering for an otherwise completed scan.
+    if (
+      typeof record.action !== 'string' ||
+      typeof record.command !== 'string' ||
+      typeof record.approvedAt !== 'string' ||
+      typeof record.rationale !== 'string'
+    ) {
+      continue;
+    }
     if ('outcome' in record && typeof record.outcome === 'string') {
       outcomes.set(record.authorizationId, record as unknown as OutcomeRecord);
-    } else if ('action' in record && typeof record.action === 'string') {
+    } else {
       approvals.set(record.authorizationId, record as unknown as ApprovalRecord);
     }
   }

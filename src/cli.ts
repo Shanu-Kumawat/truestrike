@@ -31,6 +31,8 @@ Environment:
   TRUEFORGE_TOKEN         OIDC ID token (hosted servers only)
   TRUESTRIKE_ALLOW_HOSTS  comma-separated extra authorized hosts
   TRUESTRIKE_MCP_SERVERS  comma-separated MCP server names to attach
+  TRUESTRIKE_SKILLS       comma-separated skill names to attach
+                          (default: web-recon,vuln-validation,report-writing)
   TRUESTRIKE_GATEWAY_PORT port for the gateway MCP server (default 8815)
   TRUESTRIKE_AUDIT_LOG    gateway audit log path (default .truestrike/audit.jsonl)
   TRUESTRIKE_STATE_FILE   scan resume state path (default .truestrike/last-scan.json)
@@ -304,9 +306,12 @@ async function driveScan(
     onTurnCreated: (turnId: string) => void,
     onProgress: (seq: number) => void,
   ) => Promise<StreamResult>,
+  knownTurnId?: string,
 ): Promise<ScanOutcome> {
   let input: TrueForgeApi.TurnInputItem[] | undefined;
-  let activeTurnId: string | undefined;
+  // A resumed running turn does not replay turn.created; seed the id so the
+  // report collection still knows which turn to download artifacts from.
+  let activeTurnId: string | undefined = knownTurnId;
 
   // Persist as soon as the turn id is known (turn.created) and flush the
   // stream cursor periodically, so a crash mid-turn resumes close to where it
@@ -440,6 +445,7 @@ export async function runScan(
       spec: buildScanSpec(target, {
         model: config.model,
         mcpServers: config.mcpServers,
+        skills: config.skills,
       }),
     },
   });
@@ -458,7 +464,8 @@ export async function runScan(
     client,
     decide,
     startedAtIso,
-    (onTurnCreated) => consumeCreatedTurn(session.id, initialInput, client, onTurnCreated),
+    (onTurnCreated, onProgress) =>
+      consumeCreatedTurn(session.id, initialInput, client, onTurnCreated, onProgress),
   );
   return await finishScan(client, config, session.id, outcome, startedAtIso);
 }
@@ -511,14 +518,16 @@ export async function runResumedScan(decide: DecisionFn = promptDecision): Promi
       client,
       decide,
       state.startedAt,
-      (onTurnCreated) =>
+      (onTurnCreated, onProgress) =>
         consumeSubscribedTurn(
           state.sessionId,
           state.turnId,
           state.lastSequenceNumber,
           client,
           onTurnCreated,
+          onProgress,
         ),
+      state.turnId,
     );
     return await finishScan(client, config, state.sessionId, outcome, state.startedAt);
   }

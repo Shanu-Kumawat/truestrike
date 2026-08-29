@@ -5,6 +5,8 @@ export interface ScanSpecOptions {
   model: string;
   /** Names of MCP servers configured on the TrueForge server (Settings > Connectors). */
   mcpServers: string[];
+  /** Names of configured TrueForge skills to attach (Settings > Skills). */
+  skills: string[];
 }
 
 const APPROVAL_SELECTORS: TrueForgeApi.McpServerApprovalToolSelector[] = ['@write', '@destructive'];
@@ -128,11 +130,13 @@ export function buildScanSpec(targetUrl: string, options: ScanSpecOptions): True
     name,
     requireApprovalForTools: APPROVAL_SELECTORS,
   }));
+  const skills: TrueForgeApi.Skill[] = options.skills.map((name) => ({ name }));
 
   return {
     model: { name: options.model },
     instructions: buildInstructions(targetUrl),
     ...(mcpServers.length > 0 ? { mcpServers } : {}),
+    ...(skills.length > 0 ? { skills } : {}),
     config: {
       iterationLimit: 60,
       dynamicSubAgents: { enabled: true },

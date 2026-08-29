@@ -54,6 +54,27 @@ describe('loadAuditEntries', () => {
     expect(await loadAuditEntries(tempPath())).toBeUndefined();
   });
 
+  it('skips malformed records instead of crashing', async () => {
+    const path = tempPath();
+    try {
+      await writeFile(
+        path,
+        [
+          // Missing command/approvedAt: must be skipped, not rendered.
+          JSON.stringify({ authorizationId: 'bad', action: 'no-cmd' }),
+          approval('good', 'works'),
+          JSON.stringify({ authorizationId: 'bad2', command: 'no-action' }),
+        ].join('\n'),
+        'utf8',
+      );
+      const entries = await loadAuditEntries(path);
+      expect(entries).toHaveLength(1);
+      expect(entries?.[0]?.approval.action).toBe('works');
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
   it('excludes approvals from before startedAt (previous scans)', async () => {
     const path = tempPath();
     try {

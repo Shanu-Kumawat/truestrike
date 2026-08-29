@@ -154,6 +154,13 @@ describe('collectReport', () => {
     );
     expect(outcome.exitCode).toBe(0);
     expect(outcome.findingsCount).toBe(0);
+    // The raw agent output is preserved for inspection, not replaced by a
+    // fabricated empty findings.json.
+    const raw = await readFile(join(outputRootBad, 'sess-5', 'findings.invalid.json'), 'utf8');
+    expect(raw).toBe('{broken');
+    await expect(
+      readFile(join(outputRootBad, 'sess-5', 'findings.json'), 'utf8'),
+    ).rejects.toThrow();
     await rm(outputRootBad, { recursive: true, force: true });
   });
 
