@@ -31,6 +31,8 @@ Environment:
   TRUEFORGE_TOKEN         OIDC ID token (hosted servers only)
   TRUESTRIKE_ALLOW_HOSTS  comma-separated extra authorized hosts
   TRUESTRIKE_MCP_SERVERS  comma-separated MCP server names to attach
+  TRUESTRIKE_SKILLS       comma-separated skill names to attach
+                          (default: web-recon,vuln-validation,report-writing)
   TRUESTRIKE_GATEWAY_PORT port for the gateway MCP server (default 8815)
   TRUESTRIKE_AUDIT_LOG    gateway audit log path (default .truestrike/audit.jsonl)
   TRUESTRIKE_STATE_FILE   scan resume state path (default .truestrike/last-scan.json)
@@ -440,6 +442,7 @@ export async function runScan(
       spec: buildScanSpec(target, {
         model: config.model,
         mcpServers: config.mcpServers,
+        skills: config.skills,
       }),
     },
   });

@@ -5,6 +5,7 @@ describe('buildScanSpec', () => {
   const spec = buildScanSpec('http://localhost:3000/', {
     model: 'openai/gpt-5',
     mcpServers: ['truestrike-gateway'],
+    skills: ['web-recon', 'vuln-validation', 'report-writing'],
   });
 
   it('uses the requested model', () => {
@@ -44,6 +45,14 @@ describe('buildScanSpec', () => {
     expect(spec.instructions).toMatch(/empty findings array/);
   });
 
+  it('attaches the configured skills by name', () => {
+    expect(spec.skills).toEqual([
+      { name: 'web-recon' },
+      { name: 'vuln-validation' },
+      { name: 'report-writing' },
+    ]);
+  });
+
   it('instructs the agent to emit a sandbox_artifacts block for the report files', () => {
     expect(spec.instructions).toMatch(/sandbox_artifacts/);
     expect(spec.instructions).toContain(
@@ -73,8 +82,10 @@ describe('buildScanSpec', () => {
     const bare = buildScanSpec('http://localhost:3000/', {
       model: 'openai/gpt-5',
       mcpServers: [],
+      skills: [],
     });
     expect(bare.mcpServers).toBeUndefined();
+    expect(bare.skills).toBeUndefined();
     expect(bare.config?.sandbox?.enabled).toBe(true);
   });
 });
