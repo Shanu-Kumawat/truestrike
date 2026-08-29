@@ -44,6 +44,14 @@ describe('buildScanSpec', () => {
     expect(spec.instructions).toMatch(/empty findings array/);
   });
 
+  it('instructs the agent to emit a sandbox_artifacts block for the report files', () => {
+    expect(spec.instructions).toMatch(/sandbox_artifacts/);
+    expect(spec.instructions).toContain(
+      '[Penetration test report](/workspace/truestrike-report/pentest_report.md)',
+    );
+    expect(spec.instructions).toContain('[Findings](/workspace/truestrike-report/findings.json)');
+  });
+
   it('requires approval before intrusive actions', () => {
     expect(spec.instructions).toMatch(/explicit human approval/i);
     expect(spec.instructions).toMatch(/denied/i);

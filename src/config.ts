@@ -9,6 +9,8 @@ export interface TrueStrikeConfig {
   extraAllowedHosts: string[];
   /** MCP server names configured on the TrueForge server to attach (comma-separated). */
   mcpServers: string[];
+  /** Gateway audit log path (rendered into reports as the approved-actions appendix). */
+  auditLogPath: string;
 }
 
 /**
@@ -50,5 +52,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConf
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+    auditLogPath: env.TRUESTRIKE_AUDIT_LOG?.trim() || '.truestrike/audit.jsonl',
   };
 }

@@ -9,6 +9,8 @@ export interface ScanState {
   lastSequenceNumber: number;
   target: string;
   savedAt: string;
+  /** Engagement start (ISO); scopes audit-appendix entries to this scan. */
+  startedAt: string;
 }
 
 export function statePathFromEnv(env: NodeJS.ProcessEnv = process.env): string {
@@ -55,6 +57,10 @@ export async function loadScanState(
         lastSequenceNumber: parsed.lastSequenceNumber,
         target: parsed.target,
         savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+        // Legacy state files predate engagement scoping; an empty startedAt
+        // means "unknown" and disables the audit-appendix filter rather than
+        // rejecting the resume outright.
+        startedAt: typeof parsed.startedAt === 'string' ? parsed.startedAt : '',
       };
     }
     return undefined;

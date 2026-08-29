@@ -8,6 +8,7 @@ import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
 import { loadConfig, loadDotEnv } from './config.js';
+import type { TrueStrikeConfig } from './config.js';
 import { buildScanSpec } from './agent/spec.js';
 import { buildApprovalInput, collectPendingCalls, describePendingCall } from './agent/approvals.js';
 import type { PendingCall } from './agent/approvals.js';
@@ -81,7 +82,6 @@ export function loadGatewayOptions(env: NodeJS.ProcessEnv = process.env): Gatewa
     auditLogPath: env.TRUESTRIKE_AUDIT_LOG?.trim() || '.truestrike/audit.jsonl',
   };
 }
-
 export async function runGateway(): Promise<number> {
   loadDotEnv();
   const { startGatewayServer } = await import('./gateway/server.js');
@@ -105,9 +105,17 @@ export type DecisionFn = (call: PendingCall) => Promise<boolean>;
 async function promptDecision(call: PendingCall): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
-    const answer = await rl.question(
-      `\n[approval required] ${sanitizeForTerminal(describePendingCall(call))}\nApprove? [y/N] `,
-    );
+    // EOF on stdin (background runs, closed terminals) must resolve as a
+    // denial; otherwise the pending top-level await kills the process with
+    // an unsettled-await crash instead of resuming the turn.
+    const answer = await Promise.race([
+      rl.question(
+        `\n[approval required] ${sanitizeForTerminal(describePendingCall(call))}\nApprove? [y/N] `,
+      ),
+      new Promise<string>((resolve) => {
+        rl.on('close', () => resolve(''));
+      }),
+    ]);
     return ['y', 'yes'].includes(answer.trim().toLowerCase());
   } finally {
     rl.close();
@@ -278,16 +286,25 @@ const CURSOR_FLUSH_INTERVAL = 20;
  * subscribed turn, or rebuilt log), resolves approval pauses with new turns,
  * and keeps the resume state file current throughout.
  */
+interface ScanOutcome {
+  code: number;
+  /** Turn that produced the final state; the report is collected from it. */
+  finalTurnId: string | undefined;
+  /** True when the scan completed (any final turn status, no crash). */
+  completed: boolean;
+}
+
 async function driveScan(
   sessionId: string,
   target: string,
   client: TrueForgeClient,
   decide: DecisionFn,
+  startedAtIso: string,
   firstTurn: (
     onTurnCreated: (turnId: string) => void,
     onProgress: (seq: number) => void,
   ) => Promise<StreamResult>,
-): Promise<number> {
+): Promise<ScanOutcome> {
   let input: TrueForgeApi.TurnInputItem[] | undefined;
   let activeTurnId: string | undefined;
 
@@ -297,7 +314,7 @@ async function driveScan(
   // clearing so an older write cannot resurrect cleared state.
   let pendingPersist: Promise<void> = Promise.resolve();
   const persist = (turnId: string, lastSequenceNumber: number): Promise<void> =>
-    saveScanState({ sessionId, turnId, lastSequenceNumber, target });
+    saveScanState({ sessionId, turnId, lastSequenceNumber, target, startedAt: startedAtIso });
   const queuePersist = (turnId: string, lastSequenceNumber: number): void => {
     pendingPersist = pendingPersist
       .then(() => persist(turnId, lastSequenceNumber))
@@ -311,7 +328,7 @@ async function driveScan(
     activeTurnId = turnId;
     queuePersist(turnId, 0);
   };
-  const onProgress = (seq: number): void => {
+  const onProgress = (seq: number) => {
     if (activeTurnId !== undefined) {
       queuePersist(activeTurnId, seq);
     }
@@ -326,18 +343,19 @@ async function driveScan(
       round === 0
         ? await firstTurn(onTurnCreated, onProgress)
         : await consumeCreatedTurn(sessionId, input!, client, onTurnCreated, onProgress);
+    activeTurnId = result.turnId ?? activeTurnId;
 
     if (result.turnStatus === 'cancelled') {
       console.error('Turn cancelled');
       await clearState();
-      return 1;
+      return { code: 1, finalTurnId: activeTurnId, completed: false };
     }
     if (result.turnStatus === 'error') {
       // Do not resume an errored turn, even if approval events were streamed
       // before the failure; resuming is only defined for paused turns.
       console.error(`Turn error: ${result.errorMessage ?? 'unknown'}`);
       await clearState();
-      return 1;
+      return { code: 1, finalTurnId: activeTurnId, completed: false };
     }
 
     // A paused turn ends with status 'done' (output null, required actions
@@ -352,7 +370,7 @@ async function driveScan(
         );
       }
       await clearState();
-      return 0;
+      return { code: 0, finalTurnId: activeTurnId, completed: true };
     }
 
     const approvals: TrueForgeApi.UserToolApprovalEvent[] = [];
@@ -368,7 +386,7 @@ async function driveScan(
 
   console.error(`Aborting after ${MAX_APPROVAL_ROUNDS} approval rounds without completion`);
   await clearState();
-  return 1;
+  return { code: 1, finalTurnId: activeTurnId, completed: false };
 }
 
 function createClient(config: { baseUrl: string; token: string | undefined }): TrueForgeClient {
@@ -377,6 +395,32 @@ function createClient(config: { baseUrl: string; token: string | undefined }): T
     timeoutInSeconds: 600,
     ...(config.token ? { token: config.token } : {}),
   });
+}
+
+/**
+ * Post-scan report collection for completed scans. Failures warn and keep
+ * the scan's exit code; a completed scan with findings yields exit code 2.
+ */
+async function finishScan(
+  client: TrueForgeClient,
+  config: TrueStrikeConfig,
+  sessionId: string,
+  outcome: ScanOutcome,
+  startedAtIso: string,
+): Promise<number> {
+  if (!outcome.completed) {
+    return outcome.code;
+  }
+  const { collectReport } = await import('./report/pipeline.js');
+  const report = await collectReport(
+    client,
+    sessionId,
+    outcome.finalTurnId,
+    'truestrike-runs',
+    config.auditLogPath,
+    startedAtIso,
+  );
+  return Math.max(outcome.code, report.exitCode);
 }
 
 export async function runScan(
@@ -390,6 +434,7 @@ export async function runScan(
   console.log(`TrueStrike - authorized target: ${target}`);
   console.log(`Connecting to TrueForge at ${config.baseUrl} (model: ${config.model})\n`);
 
+  const startedAtIso = new Date().toISOString();
   const { data: session } = await client.sessions.create({
     agent: {
       spec: buildScanSpec(target, {
@@ -407,9 +452,15 @@ export async function runScan(
     },
   ];
 
-  return driveScan(session.id, target, client, decide, (onTurnCreated) =>
-    consumeCreatedTurn(session.id, initialInput, client, onTurnCreated),
+  const outcome = await driveScan(
+    session.id,
+    target,
+    client,
+    decide,
+    startedAtIso,
+    (onTurnCreated) => consumeCreatedTurn(session.id, initialInput, client, onTurnCreated),
   );
+  return await finishScan(client, config, session.id, outcome, startedAtIso);
 }
 
 export async function runResumedScan(decide: DecisionFn = promptDecision): Promise<number> {
@@ -454,24 +505,38 @@ export async function runResumedScan(decide: DecisionFn = promptDecision): Promi
 
   if (turn.state.status === 'running') {
     console.log('Turn still running on the server; reconnecting to the event stream...\n');
-    return driveScan(state.sessionId, target, client, decide, (onTurnCreated) =>
-      consumeSubscribedTurn(
-        state.sessionId,
-        state.turnId,
-        state.lastSequenceNumber,
-        client,
-        onTurnCreated,
-      ),
+    const outcome = await driveScan(
+      state.sessionId,
+      target,
+      client,
+      decide,
+      state.startedAt,
+      (onTurnCreated) =>
+        consumeSubscribedTurn(
+          state.sessionId,
+          state.turnId,
+          state.lastSequenceNumber,
+          client,
+          onTurnCreated,
+        ),
     );
+    return await finishScan(client, config, state.sessionId, outcome, state.startedAt);
   }
 
   console.log('Turn already finished; rebuilding from the event log...\n');
-  return driveScan(state.sessionId, target, client, decide, async (onTurnCreated) =>
-    rebuildTurnFromEvents(
-      await client.sessions.listTurnEvents(state.sessionId, state.turnId),
-      onTurnCreated,
-    ),
+  const outcome = await driveScan(
+    state.sessionId,
+    target,
+    client,
+    decide,
+    state.startedAt,
+    async (onTurnCreated) =>
+      rebuildTurnFromEvents(
+        await client.sessions.listTurnEvents(state.sessionId, state.turnId),
+        onTurnCreated,
+      ),
   );
+  return await finishScan(client, config, state.sessionId, outcome, state.startedAt);
 }
 
 export async function main(argv: string[], decide?: DecisionFn): Promise<number> {

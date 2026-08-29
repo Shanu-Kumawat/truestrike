@@ -16,6 +16,7 @@ describe('loadConfig', () => {
     expect(config.token).toBeUndefined();
     expect(config.extraAllowedHosts).toEqual([]);
     expect(config.mcpServers).toEqual([]);
+    expect(config.auditLogPath).toBe('.truestrike/audit.jsonl');
   });
 
   it('parses comma-separated allowlist and mcp server lists', () => {
@@ -24,9 +25,11 @@ describe('loadConfig', () => {
         TRUESTRIKE_MODEL: 'openai/gpt-5',
         TRUESTRIKE_ALLOW_HOSTS: 'A.test, b.test ,,',
         TRUESTRIKE_MCP_SERVERS: 'gateway, search',
+        TRUESTRIKE_AUDIT_LOG: '/tmp/audit.jsonl',
       }),
     );
     expect(config.extraAllowedHosts).toEqual(['a.test', 'b.test']);
     expect(config.mcpServers).toEqual(['gateway', 'search']);
+    expect(config.auditLogPath).toBe('/tmp/audit.jsonl');
   });
 });
