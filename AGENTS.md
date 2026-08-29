@@ -64,7 +64,9 @@ pnpm check          # all of the above - must pass before opening a PR
 ```
 src/        agent CLI, TrueForge SDK integration, report pipeline
 skills/     SKILL.md packs loaded by the agent (web-recon, vuln-validation, ...)
-sandbox/    Daytona snapshot definition (slim security toolchain image)
+sandbox/    toolchain overlay Dockerfile (built into a Daytona snapshot)
+worker/     Cloudflare relay so the sandbox can reach the demo target
+scripts/    demo-target lifecycle, toolchain snapshot creation
 tests/      vitest suites
 docs/       project definition, architecture, review discipline
 ```

@@ -38,30 +38,50 @@ The application will be available at http://localhost:3000.
 
 ## Making the target reachable from the sandbox
 
-TrueStrike's agent executes its tooling inside a Daytona cloud sandbox. A cloud
-sandbox cannot reach services bound to your machine's loopback interface, so
-`http://localhost:3000` is only reachable from the CLI process, not from the
-agent's tools. For live scans, expose the local target through a tunnel and
-authorize the tunnel hostname explicitly:
+TrueStrike's agent executes its tooling inside a Daytona cloud sandbox, and the
+sandbox's egress is restricted to an allowlist of essential services (package
+registries, GitHub, and CDN endpoints including `*.workers.dev`). Two
+consequences for the demo target:
+
+1. The sandbox cannot reach services bound to your machine's loopback, so
+   `http://localhost:3000` is only reachable from the CLI process.
+2. Plain quick tunnels (`*.trycloudflare.com`) are NOT on the allowlist.
+
+The demo therefore runs the target through a two-hop Cloudflare relay:
+
+```
+sandbox -> https://<name>.<account>.workers.dev (allowlisted CDN)
+        -> Cloudflare edge -> trycloudflare quick tunnel -> localhost:3000
+```
+
+Setup:
 
 ```bash
-# one-off quick tunnel, no account required (https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-quick-tunnels/)
+# 1. quick tunnel to the local Juice Shop
 cloudflared tunnel --url http://localhost:3000
-# prints something like: https://<random-words>.trycloudflare.com
+# prints: https://<random-words>.trycloudflare.com
 
-# authorize that exact hostname for the scan (comma-separated list)
-TRUESTRIKE_ALLOW_HOSTS=<random-words>.trycloudflare.com \
-  pnpm truestrike scan https://<random-words>.trycloudflare.com
+# 2. deploy the relay worker (worker/ in this repo; wrangler logged in)
+cd worker
+npx wrangler deploy
+
+# 3. point the worker at the tunnel (redo whenever the tunnel restarts
+#    with a new URL - no redeploy needed)
+echo "https://<random-words>.trycloudflare.com" | npx wrangler secret put TUNNEL_URL
+
+# 4. authorize the worker hostname and scan
+TRUESTRIKE_ALLOW_HOSTS=<name>.<account>.workers.dev \
+  pnpm truestrike scan https://<name>.<account>.workers.dev
 ```
 
 Security notes for this setup:
 
-- The tunnel URL is random and short-lived; tear the tunnel down when done.
-- The tunnel is reachable from the public internet while it runs. Juice Shop
-  is an intentionally vulnerable app with no real data, but do not leave the
-  tunnel running unattended, and never tunnel a real application this way.
-- Only ever add tunnel hostnames you created yourself to
-  `TRUESTRIKE_ALLOW_HOSTS`.
+- Both hops are Cloudflare-owned infrastructure; the tunnel URL is random and
+  the worker URL is under your account. Tear the tunnel down when done.
+- The relay is reachable from the public internet while it runs. Juice Shop is
+  an intentionally vulnerable app with no real data, but do not leave the
+  relay running unattended, and never relay a real application this way.
+- Only ever add hostnames you created yourself to `TRUESTRIKE_ALLOW_HOSTS`.
 
 ## Management commands
 
@@ -106,6 +126,6 @@ wait longer and retry.
 
 TrueStrike's scope allowlist defaults to loopback addresses only
 (`localhost`, `127.0.0.1`). The Juice Shop demo target fits this constraint;
-when using a tunnel (see above), its hostname must be added explicitly via
+when using the relay (see above), its hostname must be added explicitly via
 `TRUESTRIKE_ALLOW_HOSTS`. Never configure TrueStrike to scan external hosts
 you do not own or have explicit written permission to test.

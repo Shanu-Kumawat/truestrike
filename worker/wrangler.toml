@@ -1,0 +1,7 @@
+name = "truestrike"
+main = "src/index.js"
+compatibility_date = "2026-08-29"
+
+# The quick-tunnel target changes on every `cloudflared tunnel --url` run.
+# Update it without redeploying code:
+#   echo "https://<tunnel>.trycloudflare.com" | npx wrangler secret put TUNNEL_URL
