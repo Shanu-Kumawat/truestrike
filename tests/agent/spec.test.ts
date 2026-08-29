@@ -33,6 +33,18 @@ describe('buildScanSpec', () => {
     expect(spec.instructions).toMatch(/not a finding/i);
   });
 
+  it('defines the report artifact contract', () => {
+    expect(spec.instructions).toContain('/workspace/truestrike-report/pentest_report.md');
+    expect(spec.instructions).toContain('/workspace/truestrike-report/findings.json');
+    expect(spec.instructions).toMatch(/"severity": "critical\|high\|medium\|low\|info"/);
+    expect(spec.instructions).toMatch(/"status": "confirmed\|probable"/);
+    expect(spec.instructions).toMatch(/cvssVector/);
+  });
+
+  it('requires both report files even with no findings', () => {
+    expect(spec.instructions).toMatch(/empty findings array/);
+  });
+
   it('requires approval before intrusive actions', () => {
     expect(spec.instructions).toMatch(/explicit human approval/i);
     expect(spec.instructions).toMatch(/denied/i);
