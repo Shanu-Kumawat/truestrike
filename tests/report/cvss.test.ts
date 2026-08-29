@@ -45,6 +45,21 @@ describe('cvssBaseScore', () => {
       cvssBaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:H/RL:U/RC:C'),
     ).not.toThrow();
   });
+
+  it('accepts modified user interaction as MUI (CVSS 3.1 spelling)', () => {
+    expect(() =>
+      cvssBaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/MUI:R/MS:C'),
+    ).not.toThrow();
+  });
+
+  it('rejects invalid values for known temporal and environmental metrics', () => {
+    expect(() => cvssBaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:INVALID')).toThrow(
+      /Invalid value "INVALID" for metric E/,
+    );
+    expect(() => cvssBaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/MAV:INVALID')).toThrow(
+      /Invalid value "INVALID" for metric MAV/,
+    );
+  });
 });
 
 describe('parseCvssVector', () => {

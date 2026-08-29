@@ -97,6 +97,11 @@ export async function collectReport(
   if (validated.validationError !== undefined) {
     console.error(`[report] findings validation: ${validated.validationError}`);
   }
+  // A validation failure must never be reported as a clean zero-findings
+  // scan: the findings count is indeterminate, so preserve the agent's raw
+  // file for inspection instead of fabricating an empty findings.json.
+  const findingsIndeterminate = validated.validationError !== undefined;
+  const findingsCount = findingsIndeterminate ? 0 : validated.findings.length;
 
   const sections: string[] = [];
   sections.push(
@@ -136,31 +141,48 @@ export async function collectReport(
 
   // The exit code reflects the engagement's findings even when report output
   // cannot be written; write failures warn and never mask exit code 2.
-  const exitCode = validated.findings.length > 0 ? 2 : 0;
+  // Indeterminate findings (validation failure) never yield 2; the warning
+  // above makes the condition explicit.
+  const exitCode = !findingsIndeterminate && validated.findings.length > 0 ? 2 : 0;
   try {
     const outputDir = join(outputRoot, sessionId);
     await mkdir(outputDir, { recursive: true });
     const finalReport = `${sections.join('\n\n---\n\n')}\n`;
     await writeFile(join(outputDir, 'pentest_report.md'), finalReport, 'utf8');
-    await writeFile(
-      join(outputDir, 'findings.json'),
-      JSON.stringify({ findings: validated.findings }, null, 2),
-      'utf8',
-    );
+    if (findingsIndeterminate) {
+      if (findingsRaw !== undefined) {
+        await writeFile(join(outputDir, 'findings.invalid.json'), findingsRaw, 'utf8');
+        console.error(
+          `[report] findings failed validation; raw agent output preserved at findings.invalid.json`,
+        );
+      }
+    } else {
+      await writeFile(
+        join(outputDir, 'findings.json'),
+        JSON.stringify({ findings: validated.findings }, null, 2),
+        'utf8',
+      );
+    }
     console.log(`\nReport written to ${join(outputDir, 'pentest_report.md')}`);
   } catch (error) {
     console.error(
       `[report] failed to write report output: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return { outputDir: undefined, findingsCount: validated.findings.length, exitCode };
+    return { outputDir: undefined, findingsCount, exitCode };
   }
-  console.log(
-    `Findings: ${validated.findings.length}${validated.findings.length > 0 ? ' (exit code 2)' : ''}`,
-  );
+  if (findingsIndeterminate) {
+    console.error(
+      '[report] scan completed but findings count is INDETERMINATE (validation failed)',
+    );
+  } else {
+    console.log(
+      `Findings: ${validated.findings.length}${validated.findings.length > 0 ? ' (exit code 2)' : ''}`,
+    );
+  }
 
   return {
     outputDir: join(outputRoot, sessionId),
-    findingsCount: validated.findings.length,
+    findingsCount,
     exitCode,
   };
 }

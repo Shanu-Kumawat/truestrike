@@ -64,13 +64,32 @@ const KNOWN_METRICS = new Set([
   'AR',
   'MAV',
   'MAC',
-  'MAPR',
-  'MAU',
+  'MPR',
+  'MUI',
   'MS',
   'MC',
   'MI',
   'MA',
 ]);
+
+/** Allowed values for temporal and environmental metrics (base eight are
+ * validated through their weight tables). */
+const OPTIONAL_METRIC_VALUES: Record<string, Set<string>> = {
+  E: new Set(['X', 'U', 'P', 'F', 'H']),
+  RL: new Set(['X', 'O', 'T', 'W', 'U']),
+  RC: new Set(['X', 'U', 'R', 'C']),
+  CR: new Set(['X', 'L', 'M', 'H']),
+  IR: new Set(['X', 'L', 'M', 'H']),
+  AR: new Set(['X', 'L', 'M', 'H']),
+  MAV: new Set(['X', 'N', 'A', 'L', 'P']),
+  MAC: new Set(['X', 'L', 'H']),
+  MPR: new Set(['X', 'N', 'L', 'H']),
+  MUI: new Set(['X', 'N', 'R']),
+  MS: new Set(['X', 'U', 'C']),
+  MC: new Set(['X', 'N', 'L', 'H']),
+  MI: new Set(['X', 'N', 'L', 'H']),
+  MA: new Set(['X', 'N', 'L', 'H']),
+};
 
 function lookup(
   table: Record<string, number>,
@@ -106,6 +125,12 @@ export function parseCvssVector(vector: string): ParsedVector {
     }
     if (!KNOWN_METRICS.has(segments[0]!)) {
       throw new CvssError(`Unknown metric "${segments[0]}" in "${vector}"`);
+    }
+    const allowed = OPTIONAL_METRIC_VALUES[segments[0]!];
+    if (allowed !== undefined && !allowed.has(segments[1]!)) {
+      throw new CvssError(
+        `Invalid value "${segments[1]}" for metric ${segments[0]} in "${vector}"`,
+      );
     }
     metrics.set(segments[0]!, segments[1]!);
   }

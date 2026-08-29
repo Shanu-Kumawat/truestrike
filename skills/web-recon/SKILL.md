@@ -71,11 +71,16 @@ For every real endpoint, inventory where input enters:
 - Route brute forcing (only if link/bundle extraction was insufficient):
   `ffuf -u <url>/FUZZ -w <small wordlist> -mc 200,301,302,401,403,500 -rate 50`
   with a small focused wordlist. Keep the rate polite; this is recon.
-- Vulnerability templates: `nuclei -u <url> -severity low,medium,high,critical`
-  is acceptable for NON-intrusive detection templates, but treat every hit as
-  a hypothesis for VALIDATE, never as a confirmed finding.
-- Do not port-scan unless the target is explicitly a host-level engagement;
-  for a web target, work at the HTTP layer.
+- Host-level scanning, ONLY when the engagement explicitly covers the host
+  (not just the web app): `nmap -Pn --top-ports 100 -sV -T3 <host>`. Read it
+  as: open ports, service versions, and nothing more. No OS detection, no
+  script scanning (`-sC`), no aggressive timing; those are validation-phase
+  techniques at the earliest, and behind the approval gateway if intrusive.
+- nuclei detection templates are NOT a recon tool here: severity filtering
+  does not make templates non-intrusive, and active templates would violate
+  the recon doctrine. If you want a nuclei pass, treat it as a VALIDATE-phase
+  hypothesis generator: each hit needs a manual, minimal PoC before it can
+  count, and any intrusive template requires gateway approval first.
 - Never run: sqlmap, exploit frameworks, credential brute force, fuzzers at
   high rates, or anything that writes to the target during recon.
 

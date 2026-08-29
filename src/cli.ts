@@ -306,9 +306,12 @@ async function driveScan(
     onTurnCreated: (turnId: string) => void,
     onProgress: (seq: number) => void,
   ) => Promise<StreamResult>,
+  knownTurnId?: string,
 ): Promise<ScanOutcome> {
   let input: TrueForgeApi.TurnInputItem[] | undefined;
-  let activeTurnId: string | undefined;
+  // A resumed running turn does not replay turn.created; seed the id so the
+  // report collection still knows which turn to download artifacts from.
+  let activeTurnId: string | undefined = knownTurnId;
 
   // Persist as soon as the turn id is known (turn.created) and flush the
   // stream cursor periodically, so a crash mid-turn resumes close to where it
@@ -461,7 +464,8 @@ export async function runScan(
     client,
     decide,
     startedAtIso,
-    (onTurnCreated) => consumeCreatedTurn(session.id, initialInput, client, onTurnCreated),
+    (onTurnCreated, onProgress) =>
+      consumeCreatedTurn(session.id, initialInput, client, onTurnCreated, onProgress),
   );
   return await finishScan(client, config, session.id, outcome, startedAtIso);
 }
@@ -514,14 +518,16 @@ export async function runResumedScan(decide: DecisionFn = promptDecision): Promi
       client,
       decide,
       state.startedAt,
-      (onTurnCreated) =>
+      (onTurnCreated, onProgress) =>
         consumeSubscribedTurn(
           state.sessionId,
           state.turnId,
           state.lastSequenceNumber,
           client,
           onTurnCreated,
+          onProgress,
         ),
+      state.turnId,
     );
     return await finishScan(client, config, state.sessionId, outcome, state.startedAt);
   }
