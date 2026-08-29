@@ -232,7 +232,7 @@ async function consumeTurnStream(
   return result;
 }
 
-async function consumeCreatedTurn(
+export async function consumeCreatedTurn(
   sessionId: string,
   input: TrueForgeApi.TurnInputItem[],
   client: TrueForgeClient,
@@ -288,7 +288,7 @@ const CURSOR_FLUSH_INTERVAL = 20;
  * subscribed turn, or rebuilt log), resolves approval pauses with new turns,
  * and keeps the resume state file current throughout.
  */
-interface ScanOutcome {
+export interface ScanOutcome {
   code: number;
   /** Turn that produced the final state; the report is collected from it. */
   finalTurnId: string | undefined;
@@ -296,7 +296,7 @@ interface ScanOutcome {
   completed: boolean;
 }
 
-async function driveScan(
+export async function driveScan(
   sessionId: string,
   target: string,
   client: TrueForgeClient,
@@ -377,6 +377,10 @@ async function driveScan(
       await clearState();
       return { code: 0, finalTurnId: activeTurnId, completed: true };
     }
+
+    // The operator prompt opens a long human-time window; the resume state
+    // must be on disk before it, or a crash during approval loses the turn.
+    await pendingPersist;
 
     const approvals: TrueForgeApi.UserToolApprovalEvent[] = [];
     for (const call of pending) {
