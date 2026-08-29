@@ -4,7 +4,6 @@ import { buildInstructions, buildScanSpec } from '../../src/agent/spec.js';
 describe('buildScanSpec', () => {
   const spec = buildScanSpec('http://localhost:3000/', {
     model: 'openai/gpt-5',
-    sandbox: true,
     mcpServers: ['truestrike-gateway'],
   });
 
@@ -33,12 +32,24 @@ describe('buildScanSpec', () => {
     expect(spec.instructions).toMatch(/not a finding/i);
   });
 
+  it('defines the report artifact contract', () => {
+    expect(spec.instructions).toContain('/workspace/truestrike-report/pentest_report.md');
+    expect(spec.instructions).toContain('/workspace/truestrike-report/findings.json');
+    expect(spec.instructions).toMatch(/"severity": "critical\|high\|medium\|low\|info"/);
+    expect(spec.instructions).toMatch(/"status": "confirmed\|probable"/);
+    expect(spec.instructions).toMatch(/cvssVector/);
+  });
+
+  it('requires both report files even with no findings', () => {
+    expect(spec.instructions).toMatch(/empty findings array/);
+  });
+
   it('requires approval before intrusive actions', () => {
     expect(spec.instructions).toMatch(/explicit human approval/i);
     expect(spec.instructions).toMatch(/denied/i);
   });
 
-  it('enables subagents, sandbox, and a sane iteration limit', () => {
+  it('enables subagents, the mandatory sandbox, and a sane iteration limit', () => {
     expect(spec.config?.dynamicSubAgents?.enabled).toBe(true);
     expect(spec.config?.sandbox?.enabled).toBe(true);
     expect(spec.config?.iterationLimit).toBeGreaterThan(10);
@@ -53,11 +64,10 @@ describe('buildScanSpec', () => {
   it('omits the mcpServers field when none are configured', () => {
     const bare = buildScanSpec('http://localhost:3000/', {
       model: 'openai/gpt-5',
-      sandbox: false,
       mcpServers: [],
     });
     expect(bare.mcpServers).toBeUndefined();
-    expect(bare.config?.sandbox?.enabled).toBe(false);
+    expect(bare.config?.sandbox?.enabled).toBe(true);
   });
 });
 
