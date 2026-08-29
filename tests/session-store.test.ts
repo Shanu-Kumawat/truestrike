@@ -65,6 +65,27 @@ describe('scan state store', () => {
     }
   });
 
+  it('loads legacy state without startedAt as empty-string scope', async () => {
+    const path = tempPath();
+    try {
+      await writeFile(
+        path,
+        JSON.stringify({
+          sessionId: 'sess-legacy',
+          turnId: 'turn-legacy',
+          lastSequenceNumber: 3,
+          target: 'http://localhost:3000/',
+          savedAt: 't',
+        }),
+        'utf8',
+      );
+      const loaded = await loadScanState(path);
+      expect(loaded).toMatchObject({ sessionId: 'sess-legacy', startedAt: '' });
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
   it('clears state and tolerates a missing file', async () => {
     const path = tempPath();
     await saveScanState(

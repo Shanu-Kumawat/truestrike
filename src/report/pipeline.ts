@@ -121,7 +121,12 @@ export async function collectReport(
     sections.push(lines.join('\n'));
   }
 
-  const auditEntries = await loadAuditEntries(auditLogPath, startedAtIso);
+  const auditEntries = await loadAuditEntries(
+    auditLogPath,
+    // An empty/unknown start (legacy resume state) disables engagement
+    // scoping rather than guessing a boundary.
+    startedAtIso === '' ? undefined : startedAtIso,
+  );
   if (auditEntries !== undefined) {
     const appendix = renderAuditAppendix(auditEntries);
     if (appendix !== undefined) {

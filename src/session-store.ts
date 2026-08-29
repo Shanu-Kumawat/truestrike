@@ -49,8 +49,7 @@ export async function loadScanState(
       typeof parsed.sessionId === 'string' &&
       typeof parsed.turnId === 'string' &&
       typeof parsed.lastSequenceNumber === 'number' &&
-      typeof parsed.target === 'string' &&
-      typeof parsed.startedAt === 'string'
+      typeof parsed.target === 'string'
     ) {
       return {
         sessionId: parsed.sessionId,
@@ -58,7 +57,10 @@ export async function loadScanState(
         lastSequenceNumber: parsed.lastSequenceNumber,
         target: parsed.target,
         savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
-        startedAt: parsed.startedAt,
+        // Legacy state files predate engagement scoping; an empty startedAt
+        // means "unknown" and disables the audit-appendix filter rather than
+        // rejecting the resume outright.
+        startedAt: typeof parsed.startedAt === 'string' ? parsed.startedAt : '',
       };
     }
     return undefined;
