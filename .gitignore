@@ -13,3 +13,6 @@ coverage/
 # TrueStrike runtime artifacts (gateway audit log, run state)
 .truestrike/
 .wrangler/
+
+# Scan report outputs (per-session pentest reports)
+truestrike-runs/
