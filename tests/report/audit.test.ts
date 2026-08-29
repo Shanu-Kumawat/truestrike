@@ -53,6 +53,29 @@ describe('loadAuditEntries', () => {
   it('returns undefined for a missing file', async () => {
     expect(await loadAuditEntries(tempPath())).toBeUndefined();
   });
+
+  it('excludes approvals from before startedAt (previous scans)', async () => {
+    const path = tempPath();
+    try {
+      await writeFile(
+        path,
+        [approval('old', 'old-scan-action'), approval('new', 'this-scan-action')]
+          .map((line, index) =>
+            line.replace(
+              '"approvedAt":"2026-08-29T10:00:00.000Z"',
+              `"approvedAt":"${index === 0 ? '2026-08-28T10:00:00.000Z' : '2026-08-29T11:00:00.000Z'}"`,
+            ),
+          )
+          .join('\n'),
+        'utf8',
+      );
+      const entries = await loadAuditEntries(path, '2026-08-29T10:30:00.000Z');
+      expect(entries).toHaveLength(1);
+      expect(entries?.[0]?.approval.action).toBe('this-scan-action');
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
 });
 
 describe('renderAuditAppendix', () => {
@@ -62,14 +85,14 @@ describe('renderAuditAppendix', () => {
         approval: {
           authorizationId: 'a1',
           action: 'sqli-probe',
-          command: 'sqlmap -u https://target/rest/products',
+          command: 'sqlmap -u http://localhost:3000/rest/products',
           rationale: 'validate injection',
           approvedAt: '2026-08-29T10:00:00.000Z',
         },
         outcome: {
           authorizationId: 'a1',
           action: 'sqli-probe',
-          command: 'sqlmap -u https://target/rest/products',
+          command: 'sqlmap -u http://localhost:3000/rest/products',
           rationale: 'validate injection',
           approvedAt: '2026-08-29T10:00:00.000Z',
           outcome: 'confirmed',
@@ -81,7 +104,7 @@ describe('renderAuditAppendix', () => {
         approval: {
           authorizationId: 'a2',
           action: 'pipe|table',
-          command: 'cmd with | and\nnewline',
+          command: 'cmd with | `tick` and\nnewline',
           rationale: 'r',
           approvedAt: '2026-08-29T10:05:00.000Z',
         },
@@ -93,7 +116,8 @@ describe('renderAuditAppendix', () => {
     expect(rendered).toContain('confirmed (2026-08-29T10:01:00.000Z)');
     expect(rendered).toContain('outcome not recorded');
     expect(rendered).toContain('pipe\\|table');
-    expect(rendered).not.toContain('cmd with | and');
+    expect(rendered).toContain('cmd with \\| \\`tick\\` and');
+    expect(rendered).not.toContain('cmd with | `tick`');
   });
 
   it('returns undefined for an empty trail', () => {

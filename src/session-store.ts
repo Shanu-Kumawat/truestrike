@@ -9,6 +9,8 @@ export interface ScanState {
   lastSequenceNumber: number;
   target: string;
   savedAt: string;
+  /** Engagement start (ISO); scopes audit-appendix entries to this scan. */
+  startedAt: string;
 }
 
 export function statePathFromEnv(env: NodeJS.ProcessEnv = process.env): string {
@@ -47,7 +49,8 @@ export async function loadScanState(
       typeof parsed.sessionId === 'string' &&
       typeof parsed.turnId === 'string' &&
       typeof parsed.lastSequenceNumber === 'number' &&
-      typeof parsed.target === 'string'
+      typeof parsed.target === 'string' &&
+      typeof parsed.startedAt === 'string'
     ) {
       return {
         sessionId: parsed.sessionId,
@@ -55,6 +58,7 @@ export async function loadScanState(
         lastSequenceNumber: parsed.lastSequenceNumber,
         target: parsed.target,
         savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+        startedAt: parsed.startedAt,
       };
     }
     return undefined;

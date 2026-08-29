@@ -10,8 +10,20 @@ export interface AuditEntry {
  * Loads the gateway audit trail and pairs each approval with its recorded
  * outcome (by authorizationId). Returns undefined when the audit file is
  * missing or unreadable so the report omits the appendix silently.
+ *
+ * When startedAtIso is provided, only approvals from that engagement are
+ * included: the audit file is shared across scans, and a report must never
+ * attribute a previous scan's intrusive actions to this one.
  */
-export async function loadAuditEntries(auditLogPath: string): Promise<AuditEntry[] | undefined> {
+export async function loadAuditEntries(
+  auditLogPath: string,
+  startedAtIso?: string,
+): Promise<AuditEntry[] | undefined> {
+  const startedAtMs = startedAtIso !== undefined ? Date.parse(startedAtIso) : undefined;
+  if (startedAtIso !== undefined && Number.isNaN(startedAtMs)) {
+    return undefined;
+  }
+
   let raw: string;
   try {
     raw = await readFile(auditLogPath, 'utf8');
@@ -43,13 +55,16 @@ export async function loadAuditEntries(auditLogPath: string): Promise<AuditEntry
 
   const entries: AuditEntry[] = [];
   for (const [authorizationId, approval] of approvals) {
+    if (startedAtMs !== undefined && Date.parse(approval.approvedAt) < startedAtMs) {
+      continue;
+    }
     entries.push({ approval, outcome: outcomes.get(authorizationId) });
   }
   return entries;
 }
 
 function cell(text: string): string {
-  return text.replaceAll('|', '\\|').replaceAll('\n', ' ');
+  return text.replaceAll('|', '\\|').replaceAll('\n', ' ').replaceAll('`', '\\`');
 }
 
 /**
@@ -74,7 +89,7 @@ export function renderAuditAppendix(entries: AuditEntry[]): string | undefined {
       ? `${entry.outcome.outcome} (${entry.outcome.recordedAt})`
       : 'outcome not recorded';
     lines.push(
-      `| ${cell(entry.approval.action)} | \`${cell(entry.approval.command)}\` | ${cell(entry.approval.approvedAt)} | ${cell(outcome)} |`,
+      `| ${cell(entry.approval.action)} | ${cell(entry.approval.command)} | ${cell(entry.approval.approvedAt)} | ${cell(outcome)} |`,
     );
   }
   return lines.join('\n');

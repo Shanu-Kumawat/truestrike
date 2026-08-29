@@ -19,6 +19,7 @@ describe('scan state store', () => {
           turnId: 'turn-1',
           lastSequenceNumber: 42,
           target: 'http://localhost:3000/',
+          startedAt: '2026-08-29T10:00:00.000Z',
         },
         path,
       );
@@ -28,6 +29,7 @@ describe('scan state store', () => {
         turnId: 'turn-1',
         lastSequenceNumber: 42,
         target: 'http://localhost:3000/',
+        startedAt: '2026-08-29T10:00:00.000Z',
       });
       expect(loaded?.savedAt).toBeTruthy();
     } finally {
@@ -52,7 +54,11 @@ describe('scan state store', () => {
   it('returns undefined when required fields are missing', async () => {
     const path = tempPath();
     try {
-      await writeFile(path, JSON.stringify({ sessionId: 'only' }), 'utf8');
+      await writeFile(
+        path,
+        JSON.stringify({ sessionId: 'only', startedAt: '2026-08-29T10:00:00.000Z' }),
+        'utf8',
+      );
       expect(await loadScanState(path)).toBeUndefined();
     } finally {
       await rm(path, { force: true });
@@ -61,7 +67,16 @@ describe('scan state store', () => {
 
   it('clears state and tolerates a missing file', async () => {
     const path = tempPath();
-    await saveScanState({ sessionId: 's', turnId: 't', lastSequenceNumber: 1, target: 'x' }, path);
+    await saveScanState(
+      {
+        sessionId: 's',
+        turnId: 't',
+        lastSequenceNumber: 1,
+        target: 'http://localhost:3000/',
+        startedAt: '2026-08-29T10:00:00.000Z',
+      },
+      path,
+    );
     await clearScanState(path);
     expect(await loadScanState(path)).toBeUndefined();
     await expect(clearScanState(path)).resolves.toBeUndefined();

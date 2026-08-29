@@ -35,7 +35,7 @@ const validFinding = {
   severity: 'medium',
   cvssVector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N',
   cvssScore: 6.1,
-  endpoint: 'https://target/search?q=',
+  endpoint: 'http://localhost:3000/search?q=',
   poc: 'submit <script> payload',
   evidence: 'payload reflected unescaped',
   remediation: 'contextual output encoding',

@@ -7,7 +7,7 @@ const validFinding = {
   severity: 'critical',
   cvssVector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
   cvssScore: 9.8,
-  endpoint: 'https://target/rest/products',
+  endpoint: 'http://localhost:3000/rest/products',
   poc: 'send payload in q parameter',
   evidence: 'database error leaked in response',
   remediation: 'parameterized queries',

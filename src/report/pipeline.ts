@@ -55,10 +55,11 @@ async function downloadText(
  * Downloads the engagement artifacts from the sandbox (the agent must have
  * emitted a sandbox_artifacts block listing them), validates findings.json,
  * renders the final report with the approved-actions appendix, and writes
- * everything to ./truestrike-runs/<sessionId>/.
+ * everything to <outputRoot>/<sessionId>/.
  *
  * Failures degrade to warnings: a completed scan always yields an exit code,
- * never a crash. Returns the exit code contribution (2 = findings found).
+ * never a crash, and a findings-derived exit code 2 is never masked by
+ * report I/O problems. Returns the exit code contribution (2 = findings).
  */
 export async function collectReport(
   client: TrueForge,
@@ -66,6 +67,7 @@ export async function collectReport(
   finalTurnId: string | undefined,
   outputRoot: string,
   auditLogPath: string,
+  startedAtIso?: string,
 ): Promise<ReportOutcome> {
   if (finalTurnId === undefined) {
     console.error('[report] no turn to collect artifacts from; skipping report');
@@ -96,9 +98,6 @@ export async function collectReport(
     console.error(`[report] findings validation: ${validated.validationError}`);
   }
 
-  const outputDir = join(outputRoot, sessionId);
-  await mkdir(outputDir, { recursive: true });
-
   const sections: string[] = [];
   sections.push(
     reportMd !== undefined
@@ -122,7 +121,7 @@ export async function collectReport(
     sections.push(lines.join('\n'));
   }
 
-  const auditEntries = await loadAuditEntries(auditLogPath);
+  const auditEntries = await loadAuditEntries(auditLogPath, startedAtIso);
   if (auditEntries !== undefined) {
     const appendix = renderAuditAppendix(auditEntries);
     if (appendix !== undefined) {
@@ -130,22 +129,33 @@ export async function collectReport(
     }
   }
 
-  const finalReport = `${sections.join('\n\n---\n\n')}\n`;
-  await writeFile(join(outputDir, 'pentest_report.md'), finalReport, 'utf8');
-  await writeFile(
-    join(outputDir, 'findings.json'),
-    JSON.stringify({ findings: validated.findings }, null, 2),
-    'utf8',
-  );
-
-  console.log(`\nReport written to ${join(outputDir, 'pentest_report.md')}`);
+  // The exit code reflects the engagement's findings even when report output
+  // cannot be written; write failures warn and never mask exit code 2.
+  const exitCode = validated.findings.length > 0 ? 2 : 0;
+  try {
+    const outputDir = join(outputRoot, sessionId);
+    await mkdir(outputDir, { recursive: true });
+    const finalReport = `${sections.join('\n\n---\n\n')}\n`;
+    await writeFile(join(outputDir, 'pentest_report.md'), finalReport, 'utf8');
+    await writeFile(
+      join(outputDir, 'findings.json'),
+      JSON.stringify({ findings: validated.findings }, null, 2),
+      'utf8',
+    );
+    console.log(`\nReport written to ${join(outputDir, 'pentest_report.md')}`);
+  } catch (error) {
+    console.error(
+      `[report] failed to write report output: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return { outputDir: undefined, findingsCount: validated.findings.length, exitCode };
+  }
   console.log(
     `Findings: ${validated.findings.length}${validated.findings.length > 0 ? ' (exit code 2)' : ''}`,
   );
 
   return {
-    outputDir,
+    outputDir: join(outputRoot, sessionId),
     findingsCount: validated.findings.length,
-    exitCode: validated.findings.length > 0 ? 2 : 0,
+    exitCode,
   };
 }

@@ -26,6 +26,25 @@ describe('cvssBaseScore', () => {
       CvssError,
     );
   });
+
+  it('rejects unknown metric keys instead of ignoring them', () => {
+    expect(() => cvssBaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/ZZ:X')).toThrow(
+      /Unknown metric/,
+    );
+  });
+
+  it('rejects metrics with extra segments', () => {
+    expect(() => cvssBaseScore('CVSS:3.1/AV:N:garbage/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H')).toThrow(
+      /Malformed/,
+    );
+  });
+
+  it('accepts known non-base metrics it does not score', () => {
+    // Temporal metrics are legal CVSS 3.1; the base score ignores them.
+    expect(() =>
+      cvssBaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H/E:H/RL:U/RC:C'),
+    ).not.toThrow();
+  });
 });
 
 describe('parseCvssVector', () => {

@@ -42,6 +42,36 @@ function privilegesWeight(pr: string, scopeChanged: boolean): number {
 
 const REQUIRED_METRICS = ['AV', 'AC', 'PR', 'UI', 'S', 'C', 'I', 'A'] as const;
 
+/**
+ * All metric keys defined by CVSS 3.1 (base, temporal, environmental).
+ * Vectors may carry metrics beyond the base eight; unknown keys are typos
+ * or garbage and must be rejected, not silently ignored.
+ */
+const KNOWN_METRICS = new Set([
+  'AV',
+  'AC',
+  'PR',
+  'UI',
+  'S',
+  'C',
+  'I',
+  'A',
+  'E',
+  'RL',
+  'RC',
+  'CR',
+  'IR',
+  'AR',
+  'MAV',
+  'MAC',
+  'MAPR',
+  'MAU',
+  'MS',
+  'MC',
+  'MI',
+  'MA',
+]);
+
 function lookup(
   table: Record<string, number>,
   value: string,
@@ -70,11 +100,14 @@ export function parseCvssVector(vector: string): ParsedVector {
 
   const metrics = new Map<string, string>();
   for (const part of parts) {
-    const [key, value] = part.split(':');
-    if (key === undefined || value === undefined || metrics.has(key)) {
+    const segments = part.split(':');
+    if (segments.length !== 2 || segments[0] === '' || metrics.has(segments[0]!)) {
       throw new CvssError(`Malformed or duplicate metric "${part}" in "${vector}"`);
     }
-    metrics.set(key, value);
+    if (!KNOWN_METRICS.has(segments[0]!)) {
+      throw new CvssError(`Unknown metric "${segments[0]}" in "${vector}"`);
+    }
+    metrics.set(segments[0]!, segments[1]!);
   }
 
   for (const key of REQUIRED_METRICS) {
