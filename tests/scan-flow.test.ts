@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import type { TrueForge } from '@truefoundry/trueforge-sdk';
 import type { PendingCall } from '../src/agent/approvals.js';
@@ -163,6 +163,34 @@ function toolResponseEvent(id: string, seq: number): Event {
   };
 }
 
+function threadCreatedEvent(id: string): Event {
+  return {
+    id,
+    data: {
+      type: 'thread.created',
+      id,
+      createdAt: '2026-08-29T10:00:00.700Z',
+      threadId: 'thread-1',
+      title: 'recon subagent',
+      parent: { threadId: 'main', toolCallId: 'call-0' },
+      agentInfo: { type: 'dynamic', name: 'recon', input: 'map the surface' },
+    } as unknown as TrueForgeApi.TurnStreamingEvent,
+  };
+}
+
+function threadDoneEvent(id: string): Event {
+  return {
+    id,
+    data: {
+      type: 'thread.done',
+      id,
+      createdAt: '2026-08-29T10:00:00.800Z',
+      threadId: 'thread-1',
+      state: { status: 'done' },
+    } as unknown as TrueForgeApi.TurnStreamingEvent,
+  };
+}
+
 function turnDoneEvent(id: string, state: TrueForgeApi.TurnDoneEventState): Event {
   return {
     id,
@@ -209,6 +237,7 @@ describe('driveScan integration (scripted event streams)', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     delete process.env.TRUESTRIKE_STATE_FILE;
     await rm(statePath, { force: true });
   });
@@ -219,15 +248,27 @@ describe('driveScan integration (scripted event streams)', () => {
   ];
 
   it('resolves an approval pause, resumes with the decision, and completes', async () => {
+    const stdoutChunks: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdoutChunks.push(String(chunk));
+      return true;
+    });
+    const loggedLines: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      loggedLines.push(args.map(String).join(' '));
+    });
+
     const pausedTurn: ScriptedTurn = {
       events: [
         turnCreatedEvent('1', 'turn-paused'),
         modelMessageBase('2'),
         deltaEvent('3', '2', 'Recon st'),
         deltaEvent('4', '2', 'arted.\n'),
-        modelMessageWithToolCall('5', 'call-1'),
-        approvalRequiredEvent('6', 'call-1', '5'),
-        pausedTurnDoneEvent('7'),
+        threadCreatedEvent('5'),
+        threadDoneEvent('6'),
+        modelMessageWithToolCall('7', 'call-1'),
+        approvalRequiredEvent('8', 'call-1', '7'),
+        pausedTurnDoneEvent('9'),
       ],
     };
     const completingTurn: ScriptedTurn = {
@@ -265,6 +306,16 @@ describe('driveScan integration (scripted event streams)', () => {
     );
 
     expect(outcome).toEqual({ code: 0, finalTurnId: 'turn-final', completed: true });
+
+    // Delta fragments streamed to the operator merge into the full reply.
+    expect(stdoutChunks.join('')).toContain('Recon started.\n');
+    // Subagent lifecycle events render as they arrive (thread.done carries
+    // no title, so the thread id renders).
+    const logged = loggedLines.join('\n');
+    expect(logged).toContain('[subagent started] recon subagent');
+    expect(logged).toContain('[subagent finished] thread-1');
+    stdoutSpy.mockRestore();
+    logSpy.mockRestore();
 
     // The operator decision was resolved from the event index.
     expect(observedCalls).toEqual([
@@ -331,26 +382,41 @@ describe('driveScan integration (scripted event streams)', () => {
     ]);
   });
 
-  it('flushes the resume cursor every 20 non-delta events mid-turn', async () => {
+  it('flushes the resume cursor every 20 non-delta events, deltas not counted', async () => {
+    // Layout: turn.created, then 20 (tool.response, delta) pairs, then
+    // turn.done. Non-delta events: 1 + 20 = 21; the flush trips exactly on
+    // the 20th non-delta event (the 19th tool response, stream index 37,
+    // stream id 38). Interleaved deltas carry higher ids but must NOT count
+    // toward the interval: if they did, the flushed cursor at index 37 would
+    // be a stale, smaller value.
     const events: Event[] = [turnCreatedEvent('1', 'turn-cursor')];
-    // 21 tool responses: enough to trip the 20-event flush inside the turn.
-    for (let i = 2; i <= 22; i += 1) {
-      events.push(toolResponseEvent(String(i), i));
+    for (let k = 1; k <= 20; k += 1) {
+      events.push(toolResponseEvent(String(2 * k), k));
+      events.push(deltaEvent(String(2 * k + 1), '2', `chunk ${k} `));
     }
-    events.push(completedTurnDoneEvent('23', 'Cursor flush verified.'));
+    events.push(completedTurnDoneEvent('42', 'Cursor flush verified.'));
 
     const observed: Array<{ turnId: string; lastSequenceNumber: number }> = [];
     const turn: ScriptedTurn = {
       events,
-      // After the consumer processes the 20th event (index 19), the cursor
-      // flush for this turn must already be on disk.
       observeAfterIndex: {
-        index: 19,
+        index: 37,
+        // Poll until the queued flush lands (bounded); a fixed sleep would
+        // flake under slow runners or filesystems.
         observe: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 25));
-          const state = await loadScanState(statePath);
-          if (state) {
-            observed.push({ turnId: state.turnId, lastSequenceNumber: state.lastSequenceNumber });
+          const deadline = Date.now() + 2000;
+          for (;;) {
+            const state = await loadScanState(statePath);
+            if (state && state.lastSequenceNumber >= 20) {
+              observed.push({ turnId: state.turnId, lastSequenceNumber: state.lastSequenceNumber });
+              return;
+            }
+            if (Date.now() > deadline) {
+              throw new Error(
+                `cursor flush did not land within 2s (last state: ${JSON.stringify(state ?? null)})`,
+              );
+            }
+            await new Promise((resolve) => setTimeout(resolve, 20));
           }
         },
       },
@@ -368,7 +434,7 @@ describe('driveScan integration (scripted event streams)', () => {
     );
 
     expect(outcome.code).toBe(0);
-    expect(observed).toEqual([{ turnId: 'turn-cursor', lastSequenceNumber: 20 }]);
+    expect(observed).toEqual([{ turnId: 'turn-cursor', lastSequenceNumber: 38 }]);
     expect(await loadScanState(statePath)).toBeUndefined();
   });
 
