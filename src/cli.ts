@@ -108,13 +108,14 @@ async function promptDecision(call: PendingCall): Promise<boolean> {
     // EOF on stdin (background runs, closed terminals) must resolve as a
     // denial; otherwise the pending top-level await kills the process with
     // an unsettled-await crash instead of resuming the turn.
-    const answer = await new Promise<string>((resolve) => {
-      rl.on('close', () => resolve(''));
+    const answer = await Promise.race([
       rl.question(
         `\n[approval required] ${sanitizeForTerminal(describePendingCall(call))}\nApprove? [y/N] `,
-        (result) => resolve(result),
-      );
-    });
+      ),
+      new Promise<string>((resolve) => {
+        rl.on('close', () => resolve(''));
+      }),
+    ]);
     return ['y', 'yes'].includes(answer.trim().toLowerCase());
   } finally {
     rl.close();
