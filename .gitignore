@@ -12,3 +12,4 @@ coverage/
 
 # TrueStrike runtime artifacts (gateway audit log, run state)
 .truestrike/
+.wrangler/
