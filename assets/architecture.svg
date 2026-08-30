@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" font-family="ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Monaco, Consolas, monospace" role="img" aria-label="TrueStrike architecture: CLI drives the TrueForge harness; subagents fan out and run tools in a Daytona sandbox built from the adopted toolchain snapshot; intrusive actions pause at the exploit gateway for human approval; the sandbox reaches the Juice Shop target through a Cloudflare relay.">
+  <defs>
+    <!-- Arrow Markers -->
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" fill="#8b949e"/>
+    </marker>
+    <marker id="arr-gold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" fill="#d29922"/>
+    </marker>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" fill="#58a6ff"/>
+    </marker>
+
+    <!-- Background Gradient -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#010409"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="960" height="420" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <text x="32" y="34" fill="#e6edf3" font-size="18" font-weight="bold" letter-spacing="0.5">TrueStrike</text>
+  <text x="32" y="53" fill="#8b949e" font-size="11.5">autonomous, human-approved pentest agent on TrueForge</text>
+
+  <!-- Connecting Edges (Background Layer) -->
+  <!-- CLI -> Harness -->
+  <line x1="215" y1="145" x2="270" y2="145" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Harness -> Sandbox -->
+  <line x1="645" y1="145" x2="700" y2="145" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Sandbox -> CF Relay (Centered at x=810) -->
+  <line x1="810" y1="205" x2="810" y2="250" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- CF Relay -> Juice Shop (Centered at x=810) -->
+  <line x1="810" y1="298" x2="810" y2="338" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Approval Gate Branching (Gold Dashed) -->
+  <path d="M 457.5 205 L 457.5 235" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <path d="M 457.5 235 L 300 235 L 300 271" fill="none" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-gold)"/>
+  <path d="M 457.5 235 L 510 235 L 510 265" fill="none" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-gold)"/>
+  <line x1="327" y1="298" x2="395" y2="298" stroke="#d29922" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr-gold)"/>
+
+  <!-- Pause Label -->
+  <rect x="325" y="226" width="160" height="18" rx="4" fill="#0d1117" fill-opacity="0.95"/>
+  <text x="405" y="239" fill="#e3b341" font-size="9.5" font-weight="bold" text-anchor="middle">pause: approval required</text>
+  <text x="361" y="291" fill="#d29922" font-size="8.5" text-anchor="middle">approves</text>
+
+  <!-- Node 1: Operator CLI -->
+  <g>
+    <rect x="40" y="85" width="175" height="120" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+    <text x="127.5" y="115" fill="#58a6ff" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="0.5">OPERATOR CLI</text>
+    <text x="127.5" y="139" fill="#8b949e" font-size="10" text-anchor="middle">scan / resume / gateway</text>
+    <text x="127.5" y="157" fill="#8b949e" font-size="10" text-anchor="middle">event stream + approvals</text>
+    <rect x="68" y="172" width="119" height="18" rx="4" fill="#1f6feb" fill-opacity="0.15" stroke="#1f6feb" stroke-width="0.8" stroke-opacity="0.5"/>
+    <text x="127.5" y="184.5" fill="#58a6ff" font-size="8.5" text-anchor="middle">interactive console</text>
+  </g>
+
+  <!-- Node 2: TrueForge Harness -->
+  <g>
+    <rect x="270" y="85" width="375" height="120" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+    <text x="457.5" y="112" fill="#58a6ff" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="0.5">TRUEFORGE HARNESS</text>
+    <text x="457.5" y="130" fill="#8b949e" font-size="10" text-anchor="middle">turns · sessions · approval gates</text>
+    <text x="457.5" y="146" fill="#8b949e" font-size="10" text-anchor="middle">18-skill library · crash-safe resume</text>
+
+    <!-- Subagents Fan-out Branch Lines -->
+    <line x1="432" y1="154" x2="389" y2="167" stroke="#1f6feb" stroke-width="1.2" stroke-opacity="0.7"/>
+    <line x1="440" y1="154" x2="440" y2="165" stroke="#1f6feb" stroke-width="1.2" stroke-opacity="0.7"/>
+    <line x1="448" y1="154" x2="491" y2="167" stroke="#1f6feb" stroke-width="1.2" stroke-opacity="0.7"/>
+
+    <!-- Subagent Nodes -->
+    <circle cx="380" cy="176" r="11" fill="#1f6feb" opacity="0.9">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="3s" begin="0s" repeatCount="indefinite"/>
+    </circle>
+    <text x="380" y="179.5" fill="#ffffff" font-size="7.5" font-weight="bold" text-anchor="middle">recon</text>
+
+    <circle cx="440" cy="176" r="11" fill="#1f6feb" opacity="0.9">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="3s" begin="1s" repeatCount="indefinite"/>
+    </circle>
+    <text x="440" y="179.5" fill="#ffffff" font-size="7.5" font-weight="bold" text-anchor="middle">vuln</text>
+
+    <circle cx="500" cy="176" r="11" fill="#1f6feb" opacity="0.9">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="3s" begin="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="500" y="179.5" fill="#ffffff" font-size="7.5" font-weight="bold" text-anchor="middle">report</text>
+
+    <text x="548" y="180" fill="#8b949e" font-size="10" text-anchor="start">subagents</text>
+  </g>
+
+  <!-- Node 3: Daytona Sandbox -->
+  <g>
+    <rect x="700" y="85" width="220" height="120" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+    <text x="810" y="112" fill="#3fb950" font-size="13" font-weight="bold" text-anchor="middle" letter-spacing="0.5">DAYTONA SANDBOX</text>
+    <text x="810" y="132" fill="#8b949e" font-size="10" text-anchor="middle">adopted toolchain snapshot</text>
+    <text x="810" y="150" fill="#8b949e" font-size="9" text-anchor="middle">nmap · nuclei · httpx · ffuf · sqlmap</text>
+    <text x="810" y="167" fill="#8b949e" font-size="8.5" text-anchor="middle">(via 409 name-adoption loophole)</text>
+    <rect x="750" y="176" width="120" height="17" rx="4" fill="#238636" fill-opacity="0.15" stroke="#238636" stroke-width="0.8" stroke-opacity="0.4"/>
+    <text x="810" y="188" fill="#3fb950" font-size="8.5" text-anchor="middle">isolated execution</text>
+  </g>
+
+  <!-- Node 4: Exploit Gateway -->
+  <g>
+    <rect x="395" y="265" width="230" height="66" rx="10" fill="#231d10" stroke="#d29922" stroke-width="1.8">
+      <animate attributeName="stroke-opacity" values="1;0.4;1" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    <text x="510" y="289" fill="#e3b341" font-size="12" font-weight="bold" text-anchor="middle">EXPLOIT GATEWAY</text>
+    <text x="510" y="306" fill="#8b949e" font-size="9.5" text-anchor="middle">MCP · one-time audited</text>
+    <text x="510" y="321" fill="#8b949e" font-size="9.5" text-anchor="middle">authorizationIds</text>
+  </g>
+
+  <!-- Node 5: Human Approval Badge -->
+  <g>
+    <circle cx="300" cy="298" r="27" fill="none" stroke="#e3b341" stroke-width="1.2" opacity="0.6">
+      <animate attributeName="r" values="27;33;27" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.6;0;0.6" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="300" cy="298" r="27" fill="#bb8009">
+      <animate attributeName="fill" values="#bb8009;#f0b72f;#bb8009" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <text x="300" y="295" fill="#0d1117" font-size="9" font-weight="bold" text-anchor="middle">HUMAN</text>
+    <text x="300" y="307" fill="#0d1117" font-size="9" font-weight="bold" text-anchor="middle">APPROVAL</text>
+  </g>
+
+  <!-- Node 6: CF Relay -->
+  <g>
+    <rect x="740" y="250" width="140" height="48" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.2"/>
+    <text x="810" y="270" fill="#a371f7" font-size="11" font-weight="bold" text-anchor="middle">CF RELAY</text>
+    <text x="810" y="286" fill="#8b949e" font-size="9" text-anchor="middle">workers.dev proxy</text>
+  </g>
+
+  <!-- Node 7: Juice Shop Target -->
+  <g>
+    <rect x="730" y="338" width="160" height="48" rx="8" fill="#161b22" stroke="#f85149" stroke-opacity="0.5" stroke-width="1.2"/>
+    <text x="810" y="358" fill="#f85149" font-size="11" font-weight="bold" text-anchor="middle">OWASP JUICE SHOP</text>
+    <text x="810" y="374" fill="#8b949e" font-size="9" text-anchor="middle">authorized target</text>
+  </g>
+
+  <!-- Flowing Packets (Uniform 3.0s Global Rhythm) -->
+  <!-- Blue: CLI -> Harness -->
+  <circle r="3.5" fill="#58a6ff">
+    <animateMotion dur="3s" repeatCount="indefinite" path="M215 145 L270 145"/>
+  </circle>
+  <circle r="3.5" fill="#58a6ff">
+    <animateMotion dur="3s" begin="1.5s" repeatCount="indefinite" path="M215 145 L270 145"/>
+  </circle>
+
+  <!-- Green: Harness -> Sandbox -->
+  <circle r="3.5" fill="#3fb950">
+    <animateMotion dur="3s" begin="0.5s" repeatCount="indefinite" path="M645 145 L700 145"/>
+  </circle>
+  <circle r="3.5" fill="#3fb950">
+    <animateMotion dur="3s" begin="2.0s" repeatCount="indefinite" path="M645 145 L700 145"/>
+  </circle>
+
+  <!-- Purple: Sandbox -> CF Relay -->
+  <circle r="3.5" fill="#a371f7">
+    <animateMotion dur="3s" begin="1.0s" repeatCount="indefinite" path="M810 205 L810 250"/>
+  </circle>
+  <circle r="3.5" fill="#a371f7">
+    <animateMotion dur="3s" begin="2.5s" repeatCount="indefinite" path="M810 205 L810 250"/>
+  </circle>
+
+  <!-- Red: CF Relay -> Target -->
+  <circle r="3.5" fill="#f85149">
+    <animateMotion dur="3s" begin="1.5s" repeatCount="indefinite" path="M810 298 L810 338"/>
+  </circle>
+  <circle r="3.5" fill="#f85149">
+    <animateMotion dur="3s" begin="0.0s" repeatCount="indefinite" path="M810 298 L810 338"/>
+  </circle>
+
+  <!-- Signature Approval Pause Packet: Travels to Human Approval, waits, then proceeds to Exploit Gateway -->
+  <circle r="4" fill="#f0b72f">
+    <animateMotion dur="3s" repeatCount="indefinite" keyPoints="0;0.5;0.5;1" keyTimes="0;0.35;0.65;1" calcMode="linear" path="M 457.5 205 L 457.5 235 L 300 235 L 300 271"/>
+  </circle>
+  <circle r="4" fill="#f0b72f">
+    <animateMotion dur="3s" begin="1.5s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear" path="M 327 298 L 395 298"/>
+  </circle>
+
+  <!-- Footer Note -->
+  <text x="480" y="407" fill="#8b949e" font-size="10.5" text-anchor="middle">every intrusive action pauses at the human approval gate — one-time audited authorizationIds, CVSS-verified report, exit code 2 on findings</text>
+</svg>

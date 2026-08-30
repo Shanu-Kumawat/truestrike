@@ -63,10 +63,12 @@ pnpm check          # all of the above - must pass before opening a PR
 
 ```
 src/        agent CLI, TrueForge SDK integration, report pipeline
-skills/     SKILL.md packs loaded by the agent (web-recon, vuln-validation, ...)
+skills/     18 SKILL.md packs (3 process + 15 vulnerability-class references)
+            plus skills.json catalog; configure via scripts/configure-skills.mjs
 sandbox/    toolchain overlay Dockerfile (built into a Daytona snapshot)
 worker/     Cloudflare relay so the sandbox can reach the demo target
-scripts/    demo-target lifecycle, toolchain snapshot creation
+scripts/    demo-target lifecycle, toolchain snapshot, skills configuration
+assets/     architecture diagram
 tests/      vitest suites
 docs/       project definition, architecture, review discipline
 ```
