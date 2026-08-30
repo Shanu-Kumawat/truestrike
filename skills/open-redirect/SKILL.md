@@ -13,7 +13,7 @@ return urls, next params, logout targets, link shorteners.
 
 1. Supply your own benign domain as the parameter value and observe where
    the Location header or client code sends the browser.
-2. Scheme-relative (//evil.example) and encoded variants to bypass naive
+2. Scheme-relative (//attacker.example) and encoded variants to bypass naive
    prefix checks that require the target host in the value.
 3. Distinguish server-side (Location header) from client-side (script)
    redirects; note which context applies.

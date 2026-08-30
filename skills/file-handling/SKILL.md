@@ -11,11 +11,15 @@ features, and static file servers.
 
 ## Method
 
-Boundary: existence checks (does a path 200 vs 403?) and uploading a
-benign file exactly as the feature intends are ungated. Retrieving content
-the filter should block, any traversal read, any crafted or hostile upload,
-and any execution attempt extract data or write attacker content: gateway
-approval first.
+Boundary (the normal-usage principle, consistent with every pack): using
+a feature exactly as a legitimate user would - registering an account,
+browsing, uploading an inert file the feature openly accepts - is ungated;
+it cannot be an attack because it is indistinguishable from normal use.
+Everything past that line gates: retrieving content a filter should block,
+traversal reads, any crafted/hostile/polyglot upload, and any execution
+attempt. The ungated upload exists only to map the surface (where files
+land, how they are served); the moment content is crafted rather than
+inert, it is gateway territory.
 
 1. Upload surface: what extensions and content types are accepted, where
    files land (guessable URLs?), are they served back as content or

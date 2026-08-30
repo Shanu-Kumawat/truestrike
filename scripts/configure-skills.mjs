@@ -28,13 +28,19 @@ const baseUrl = arg('base-url', process.env.TRUEFORGE_BASE_URL ?? 'http://localh
 const ref = arg('ref', 'main');
 const repoUrl = 'https://github.com/Shanu-Kumawat/truestrike';
 
+// Hosted TrueForge servers require the OIDC ID token; local mode ignores it.
+const headers = { 'content-type': 'application/json' };
+if (process.env.TRUEFORGE_TOKEN) {
+  headers.Authorization = `Bearer ${process.env.TRUEFORGE_TOKEN}`;
+}
+
 const catalog = JSON.parse(await readFile(join(repoRoot, 'skills', 'skills.json'), 'utf8'));
 
 let failures = 0;
 for (const skill of catalog.skills) {
   const response = await fetch(`${baseUrl}/api/v1/settings/skills`, {
     method: 'PUT',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({
       manifest: {
         type: 'git',
