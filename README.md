@@ -9,8 +9,7 @@ report. Exit code 2 when findings exist - CI-friendly by design.
 
 ![Architecture](assets/architecture.svg)
 
-Built for the WeMakeDevs Agent Harness Hackathon (Aug 2026) by Shanu Kumawat
-and Rishi Sulakhe. Docs: [project](docs/project.md) ·
+Built for the WeMakeDevs Agent Harness Hackathon (Aug 2026). Docs: [project](docs/project.md) ·
 [architecture](docs/architecture.md) · [demo target](docs/demo-target.md) ·
 [review discipline](docs/qodo-workflow.md)
 
@@ -65,14 +64,25 @@ pnpm install
 cp .env.example .env          # fill in your keys - never commit .env
 pnpm check                    # typecheck + lint + format + tests
 
-# one-time: build the toolchain snapshot in Daytona (see docs/architecture.md)
-node scripts/create-toolchain-snapshot.mjs   # from a trueforge checkout
+# one-time: build the toolchain snapshot in Daytona. The script needs the
+# @daytona/sdk package, so run it from a trueforge checkout (any checkout;
+# see docs/architecture.md#sandbox-toolchain):
+#   cd <trueforge-checkout>/packages/trueforge-core
+#   node <this-repo>/scripts/create-toolchain-snapshot.mjs \
+#     <this-repo>/sandbox/overlay.Dockerfile trueforge-build-<digest>
+# (digest = the tag pinned at the top of sandbox/overlay.Dockerfile)
 
 # one-time: configure the 18 skills on your TrueForge server
 node scripts/configure-skills.mjs
 
 # run the demo target + relay (docs/demo-target.md), then:
 pnpm truestrike gateway       # approval-gated MCP server (keep running)
+
+# one-time: register the gateway with TrueForge so scans attach it:
+#   Settings > Connectors > add http://127.0.0.1:8815/mcp as
+#   "truestrike-gateway", then set in .env:
+#   TRUESTRIKE_MCP_SERVERS=truestrike-gateway
+
 pnpm truestrike scan <demo-url>
 pnpm truestrike scan --resume # after a crash or disconnect
 ```
