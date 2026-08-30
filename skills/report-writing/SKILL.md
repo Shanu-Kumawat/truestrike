@@ -3,6 +3,14 @@
 Use this skill during the REPORT phase, when validation is complete and you
 are writing the two required artifacts.
 
+## Who executes this
+
+Orchestrators: hand this to a reporting subagent together with the
+consolidated findings and evidence paths, then review its draft before
+emitting the final sandbox_artifacts block. Reporting subagents: write both
+artifacts yourself from the evidence on disk, and return their paths plus a
+one-paragraph summary of what you reported.
+
 ## The two artifacts (contract)
 
 You must produce, inside the sandbox, before finishing:
