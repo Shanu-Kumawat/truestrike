@@ -50,9 +50,24 @@ sandboxes, approval gates as a first-class primitive, and a thin domain layer
 (orchestration spec, skills, toolchain, reporting) instead of a bespoke runtime.
 All code in this repo is original.
 
+## Status: shipped
+
+All in-scope items shipped and verified end to end (12 Qodo-reviewed PRs):
+
+- Full engagement proven live against Juice Shop: 8 confirmed findings,
+  the headline a SQL-injection auth bypass at CVSS 9.8, every score
+  recomputed from its vector by our own CVSS 3.1 engine
+- The approval chain demonstrated live: harness pause -> CLI prompt ->
+  one-time audited authorizationId -> PoC executed -> audit appendix in
+  the report -> exit code 2
+- Crash-safe resume proven live: a killed scan rebuilt its paused turn
+  from the persisted event log, pending approval included
+- 18-skill library with role-aware mandatory delegation (specialist
+  subagents per class cluster observed spawning live)
+
 ## Scope
 
-**In scope (hackathon MVP):**
+**In scope (hackathon MVP, delivered):**
 
 - Black-box testing of a single authorized web target (demo: local OWASP Juice Shop)
 - Recon → validation → approval-gated exploitation → report, end to end

@@ -28,6 +28,23 @@ TrueForge is the harness: model calls, tool routing, subagent orchestration,
 approval checkpoints, session persistence. TrueStrike never re-implements those -
 it composes them through an AgentSpec and drives them through the SDK event stream.
 
+### Delegation doctrine (role-aware)
+
+The orchestrator doctrine (src/agent/spec.ts) splits roles explicitly, because
+TrueForge dynamic subagents inherit the full parent definition - including the
+doctrine itself:
+
+- **Orchestrator**: zero target-facing requests from its own turns (no
+  scanners, probes, or payloads, not even a single quick test). Own turns:
+  skills/evidence reading, decomposition, subagent briefs, tracking,
+  consolidation.
+- **Every subagent brief** carries the role statement, the exact scope
+  statement, the objective with skill file paths, and the expected return
+  format; up to 5 subagents run in parallel.
+- **Subagents**: hands-on executors; they do not spawn further subagents and
+  read their named skill files before touching the target. Gateway approvals
+  surface to the operator from subagent threads exactly as from the root.
+
 ## Layers in this repo
 
 ### `src/cli.ts` - operator entry point
@@ -68,18 +85,40 @@ approved-actions appendix.
 Tool results and approval prompts can carry target-influenced content; ANSI
 escape sequences and control characters are stripped before printing.
 
-### `src/report/` - findings -> report (TS-15, in progress)
+### `src/report/` - findings -> report
 
-Downloads `/workspace/truestrike-report/{pentest_report.md, findings.json}`
-from the sandbox, validates the findings schema, renders the CVSS-scored
-report with the approved-actions appendix, and maps exit codes.
+Downloads both artifacts from the sandbox (`downloadSandboxFile`, gated by
+the agent's `sandbox_artifacts` block), validates `findings.json` against
+the doctrine schema, **recomputes every CVSS 3.1 base score from its
+vector** with our own spec-faithful engine (computed wins; discrepancies
+surface in the report), renders the approved-actions appendix from the
+gateway audit trail, and maps exit codes (0/1/2). Validation failures
+preserve the raw agent output as `findings.invalid.json` instead of
+fabricating an empty result.
 
-### `skills/` - SKILL.md packs (TS-12, in progress)
+### `skills/` - the two-tier skills library
 
-Git-backed instruction packs the agent loads on demand: `web-recon`,
-`vuln-validation`, `report-writing`.
+18 packs configured on the TrueForge server from this repo, attached to
+every scan (`TRUESTRIKE_SKILLS=*` expands to all configured packs):
+
+- **Process tier**: `web-recon`, `vuln-validation`, `report-writing` - how
+  to work, each carrying a "Who executes this" delegation section
+- **Reference tier** (15 packs, one per vulnerability class): sql-injection,
+  xss, command-injection, authentication-bypass, jwt-and-token-security,
+  access-control, business-logic, information-disclosure, file-handling,
+  ssrf, csrf, open-redirect, cors-misconfiguration,
+  client-side-vulnerabilities, dependency-exposure. Each states the
+  detect/exploit boundary explicitly: detection probes flow free; anything
+  that extracts data, attempts authentication, writes state, or executes
+  commands goes through the gateway.
+
+`skills/skills.json` is the catalog; `scripts/configure-skills.mjs` upserts
+all packs to the server. The doctrine makes the library a floor, not a
+boundary: an uncovered surface is a surface to test.
 
 ### `sandbox/` - toolchain snapshot
+
+<span id="sandbox-toolchain"></span>
 
 `overlay.Dockerfile` extends the official TrueForge sandbox image (pinned
 release digest, checksum-verified tool downloads) with nmap, sqlmap, and
