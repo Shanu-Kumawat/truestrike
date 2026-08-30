@@ -53,6 +53,16 @@ describe('buildScanSpec', () => {
     ]);
   });
 
+  it('makes delegation mandatory for the orchestrator and hands-on for subagents', () => {
+    expect(spec.instructions).toMatch(/you do not send requests to the target yourself/i);
+    expect(spec.instructions).toMatch(/not even a single quick test/i);
+    expect(spec.instructions).toMatch(/a brief delivered through create_sub_agent/i);
+    expect(spec.instructions).toMatch(/You are a hands-on subagent/i);
+    expect(spec.instructions).toMatch(/subagents do not spawn further subagents/i);
+    expect(spec.instructions).toMatch(/\/opt\/tfy\/skills\/web-recon\/SKILL\.md/);
+    expect(spec.instructions).toMatch(/up to 5 subagents in parallel/i);
+  });
+
   it('teaches the library-first principle and keeps skills a floor, not a boundary', () => {
     expect(spec.instructions).toMatch(/instead of guessing payloads/i);
     expect(spec.instructions).toMatch(/depth, not a boundary/i);

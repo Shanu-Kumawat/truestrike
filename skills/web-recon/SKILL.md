@@ -3,6 +3,14 @@
 Use this skill during the RECON phase, before any validation work. Its goal is
 a complete, evidence-backed map of the authorized target's attack surface.
 
+## Who executes this
+
+Orchestrators: hand this method to a recon subagent (or several in parallel,
+split by surface area - routes/APIs, auth surface, tech and bundles). Never
+run target-facing recon from orchestrator turns. Subagents: execute the
+method below yourself, save the evidence, and return the completed map with
+evidence file paths.
+
 ## Prime directive
 
 Recon is passive or near-passive information gathering. You map what exists;

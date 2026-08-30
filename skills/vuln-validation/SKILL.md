@@ -4,6 +4,15 @@ Use this skill during the VALIDATE phase. Its job: turn recon hypotheses into
 proven findings (or discard them) with working, evidence-backed
 proof-of-concepts executed inside the sandbox against the authorized target.
 
+## Who executes this
+
+Orchestrators: spawn one validation subagent per candidate or per class
+cluster (they run in parallel up to the harness limit), passing this skill's
+path and the hypothesis list in the brief. Subagents: run the full loop below
+yourself, including the gateway flow - approval prompts surface to the
+operator from your thread exactly as they would from the orchestrator's.
+Return every finding with its evidence directory, or the discard reasons.
+
 ## Prime directive
 
 A finding without a working PoC is a hypothesis, not a finding. Your value is
