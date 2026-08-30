@@ -20,10 +20,15 @@ in DOM context via JavaScript sinks.
 3. Escalate marker to alert-grade payload ONLY with a harmless function
    (`console.log` or a unique DOM change) when proving; the report PoC can
    show the exact string.
-4. For stored: submit in one request, prove persistence by fetching the
-   rendered view in a second, then confirm with the raw response.
+4. For stored: submitting the payload writes attacker content to the
+   target, so it goes through the gateway (approval carries the exact
+   payload); then prove persistence by fetching the rendered view.
 5. For DOM: read the client bundle, locate the sink, and craft the hash or
    parameter path that reaches it.
+
+Boundary: reflected GET probes with inert markers are ungated detection;
+payload WRITES (stored) and anything executing script are gateway
+territory.
 
 ## Probes
 
@@ -34,7 +39,11 @@ curl -s "http://localhost:3000/search?q=marker123" | grep -n marker123
 # attribute-context break
 curl -s "http://localhost:3000/search?q=%22%3Emarker123" | grep -n marker123
 
-# stored: submit then fetch the rendered page
+```
+
+Gateway payload (stored write; approval carries the exact payload):
+
+```sh
 curl -s -X POST http://localhost:3000/api/Feedbacks -H 'content-type: application/json' \
   -d '{"comment":"marker456","rating":1}'
 curl -s http://localhost:3000/ | grep -n marker456

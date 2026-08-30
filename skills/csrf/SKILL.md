@@ -14,20 +14,23 @@ modification, role changes, anything with side effects.
 1. Identify state-changing endpoints and their auth mechanism (cookie vs
    header token). Header-token APIs are not CSRF-able via forms.
 2. Cookie check: cookie flags, SameSite attribute on the session cookie.
-3. Token check: does the request need a per-session token, and is it
-   validated server-side (removing it should fail)?
-4. PoC construction: a minimal HTML form or fetch page that performs the
-   action as a logged-in victim. Hosting the PoC and driving a browser to
-   it is intrusive; gateway approval first. Inspecting defenses is
-   read-only.
+3. Token presence check (passive): does the client attach a per-session
+   token to state-changing requests? Absence is already a strong signal.
+4. Token enforcement check and PoC execution: sending a state-changing
+   request without its token PERFORMS the action if enforcement is missing,
+   so both the enforcement probe and the forged-PoC execution go through
+   the gateway. Inspecting cookies and headers is read-only.
 
 ## Probes
 
 ```sh
-# cookie attributes
+# cookie attributes (passive)
 curl -sI http://localhost:3000/ | grep -i set-cookie
+```
 
-# is the token actually required? (own session, remove token)
+Gateway payload (token-enforcement probe; approval carries the request):
+
+```sh
 curl -s -X POST http://localhost:3000/rest/savexhr -H "Cookie: <session>" \
   -H 'content-type: application/json' -d '{}' -o /dev/null -w '%{http_code}\n'
 ```

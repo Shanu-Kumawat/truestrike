@@ -21,20 +21,22 @@ return urls, next params, logout targets, link shorteners.
 ## Probes
 
 ```sh
-# header redirect with attacker-controlled destination
-curl -sI "http://localhost:3000/redirect?to=https://example.com/tsmarker" | grep -i location
+# header redirect with attacker-controlled destination (local stand-in
+# origin on another port proves arbitrary-destination control)
+curl -sI "http://localhost:3000/redirect?to=http://127.0.0.1:9999/tsmarker" | grep -i location
 
-# scheme-relative bypass of prefix checks
-curl -sI "http://localhost:3000/redirect?to=//example.com/tsmarker" | grep -i location
+# scheme-relative bypass of prefix checks (reserved .example TLD)
+curl -sI "http://localhost:3000/redirect?to=//attacker.example/tsmarker" | grep -i location
 
 # encoded variant
-curl -sI "http://localhost:3000/redirect?to=https%3A%2F%2Fexample.com%2Ftsmarker" | grep -i location
+curl -sI "http://localhost:3000/redirect?to=http%3A%2F%2F127.0.0.1%3A9999%2Ftsmarker" | grep -i location
 ```
 
 ## Proving it
 
-- A Location header (or a script redirect) pointing off-site to your
-  marker domain. Save the request and the header/response.
+- A Location header (or a script redirect) pointing to an arbitrary
+  origin you chose (the stand-in host stands in for an attacker domain in
+  a real engagement). Save the request and the header/response.
 - Same-site-only redirects are not the finding.
 
 ## Counterchecks

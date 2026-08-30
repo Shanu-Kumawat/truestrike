@@ -10,17 +10,22 @@ and order parameters, login forms, API query params, JSON bodies.
 - Endpoints where sort/order/column names are passed as parameters.
 - Login endpoints where classic payloads change behavior.
 
-## Method (read-only first)
+## Method
+
+DETECT (no approval): probes that change nothing and extract nothing.
+EXPLOIT (gateway): any data extraction or metadata retrieval, including
+UNION SELECT, version() calls, table enumeration, and every sqlmap run.
+The boundary is deliberate: detection flows freely; taking data out of the
+database is active exploitation and pauses for the operator.
 
 1. Baseline: send a benign value, record status, length, and body digest.
+   Save this control response; every later claim is a diff against it.
 2. Break the quote: value like `a'` and compare. An error or a length change
    on `a''` returning to baseline suggests string interpolation.
 3. Boolean oracle: pair requests differing only in predicate truth, for
    example `x' AND '1'='1` vs `x' AND '1'='2`; diff length and content.
 4. Determine the context: how many columns, string vs numeric, where the
    input sits (WHERE, ORDER BY, LIMIT, INSERT).
-5. UNION extraction only after column count is known (ORDER BY increments
-   or UNION with NULL padding).
 
 ## Probes
 
@@ -37,19 +42,31 @@ curl -s "http://localhost:3000/rest/products/search?q=x'+ORDER+BY+10--"
 curl -s "http://localhost:3000/rest/products/search?q=x'+UNION+SELECT+NULL,NULL,NULL--"
 ```
 
-Automated extraction (sqlmap) is INTRUSIVE: route it through the gateway
-with request_intrusive_approval. Manual read-only probes above are fine
-without approval.
+Everything beyond detection is gateway territory: UNION data retrieval,
+version()/metadata extraction, table enumeration, and all sqlmap runs.
+Request approval with the exact payload before sending.
 
 ## Proving it
 
 The PoC must demonstrate data control, not just an error:
 
-- Extract a benign, non-user row (version() or sqlite_version()) as proof.
-- Escalate to table enumeration and a specific table's columns only far
-  enough to prove impact; save request/response pairs to evidence.
+- Extract a benign, non-user value (sqlite_version()) as the first proof,
+  behind gateway approval.
+- Escalate to a specific table's columns only far enough to prove impact;
+  save the payload request, its response, AND the baseline control response.
 - An error alone is a probable, not confirmed, finding unless it leaks query
   structure or data.
+
+## DBMS quick facts
+
+- SQLite (this target family): no sleep primitive (skip time-based;
+  boolean/error/UNION carry the work), sqlite_version(), recursive CTEs.
+- MySQL: SLEEP(), @@version, LOAD_FILE/INTO OUTFILE (write side is out of
+  scope beyond stating the capability).
+- PostgreSQL: pg_sleep(), version(), COPY programs (privileged).
+- Filter bypass fragments when payloads are blocked: `/**/` for spaces,
+  `UN/**/ION` keyword splitting, case folding, hex literals, double
+  URL-encoding.
 
 ## Counterchecks
 

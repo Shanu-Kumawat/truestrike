@@ -15,10 +15,10 @@ endpoint that distinguishes authenticated from anonymous requests.
 1. Map the auth model first: what identifies a session (cookie, bearer,
    both), how login succeeds and fails, what a protected endpoint returns
    when anonymous.
-2. Credential testing beyond a couple of manual attempts is brute force:
-   intrusive, gateway approval required. The exception is documented default
-   or well-known test credentials for the demo target class (check for a
-   default admin account as a single manual attempt).
+2. EVERY credential guess is an authentication-bypass attempt and goes
+   through the gateway, including a single default-credential login (its
+   success authenticates you as a real account). Ungated work here is
+   observation only: enumeration oracles and mechanism mapping.
 3. Password reset abuse: can security questions be enumerated or brute
    forced (that is brute force too), can reset tokens be predicted, does
    reset leak whether an account exists?
@@ -36,10 +36,6 @@ curl -s -X POST http://localhost:3000/rest/user/login -H 'content-type: applicat
 curl -s -X POST http://localhost:3000/rest/user/login -H 'content-type: application/json' \
   -d '{"email":"admin@example.com","password":"x"}'
 
-# default credentials (single manual attempt)
-curl -s -X POST http://localhost:3000/rest/user/login -H 'content-type: application/json' \
-  -d '{"email":"admin@juice-sh.op","password":"admin123"}'
-
 # anonymous vs authenticated access to the same endpoint
 curl -s http://localhost:3000/rest/user/whoami
 ```
@@ -48,10 +44,12 @@ curl -s http://localhost:3000/rest/user/whoami
 
 - Enumeration: two responses differing only in account-existence signal,
   saved as a pair.
-- Default/weak credentials: the successful login response with the token.
+- Default/weak credentials: gateway approval first, then the successful
+  login response with the token as evidence.
 - Reset abuse: the reset completed for an account you control proving the
   mechanism, then the flaw demonstrated safely.
-- Brute force success requires gateway approval before the attempt.
+- Brute force and every guessed-credential login require gateway approval
+  before the attempt.
 
 ## Counterchecks
 

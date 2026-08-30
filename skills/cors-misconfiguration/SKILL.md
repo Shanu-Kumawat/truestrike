@@ -17,7 +17,7 @@ allows origins.
    wildcard, null, or a fixed allowlist entry.
 2. Try variations that defeat naive allowlist logic: subdomain of the
    allowed origin that you could register in theory, the string null,
-   allowed-origin suffix tricks (evil-example.com vs example.com).
+   allowlist suffix tricks (a host ending in the allowed suffix).
 3. Check credentials: reflection plus Allow-Credentials true means any
    origin can read authenticated responses in a browser.
 

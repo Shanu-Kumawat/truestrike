@@ -55,7 +55,7 @@ describe('skills library integrity', () => {
       const hosts = [...body.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)].map((m) => m[1]!);
       for (const host of hosts) {
         const isLoopback = /^(localhost|127\.0\.0\.1)/.test(host);
-        const isOffsite = /(^|\.)attacker\.example$|(^|\.)example\.com$/.test(host);
+        const isOffsite = /(^|\.)attacker\.example$/.test(host);
         expect(isLoopback || isOffsite, `${entry.name}: ${host}`).toBe(true);
       }
     }

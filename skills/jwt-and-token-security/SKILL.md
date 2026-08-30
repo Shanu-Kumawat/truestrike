@@ -14,35 +14,27 @@ Use when the app uses JWTs or structured bearer tokens anywhere in auth.
 1. Decode the token offline (base64url of header and payload; python or
    `jq`): record alg, exp, claims, and any key identifiers.
 2. alg:none attack: drop the signature, set alg to none, modify a benign
-   claim (id or email of your own test account), send. This is an
-   authentication-bypass attempt: gateway approval if it escalates beyond
-   your own account.
-3. Weak HMAC secret: if the app signs HS* with a guessable secret, forging
-   is possible. Trying a small set of obvious secrets on YOUR OWN account
-   token is a read-only test; forging other identities requires approval.
+   claim. Transmitting ANY modified or forged token is a forgery attempt:
+   gateway approval required, always, regardless of which account it names.
+3. Weak HMAC secret: testing candidate secrets offline against a captured
+   token's signature is passive and ungated. Sending a re-signed token to
+   the server is a forgery attempt: gateway approval.
 4. RS/HS confusion: when the server publishes its public key (jwks or
-   similar endpoint), try re-signing the token as HS* with the public key
-   bytes as the secret. Approval required before sending any forged token
-   for an identity that is not yours.
+   similar endpoint), build the HS* re-signature with the public key bytes
+   offline freely; sending it to the server needs gateway approval.
 5. Claim trust: can exp be omitted, is the identity claim the one checked,
    do extra claims (role, admin) change authorization?
 
 ## Probes
 
 ```sh
-# decode offline (no requests)
-python3 - <<'PY'
-import base64, json, sys
-h, p, s = sys.argv[1].split('.')
-pad = lambda x: x + '=' * (-len(x) % 4)
-print(json.loads(base64.urlsafe_b64decode(pad(h))))
-print(json.loads(base64.urlsafe_b64decode(pad(p))))
-PY
-
-# alg:none with your own account id (observe response only)
-curl -s http://localhost:3000/rest/user/whoami \
-  -H "Authorization: Bearer <modified-token>"
+# decode offline (no requests); pass the token as an argument
+python3 -c 'import base64,json,sys; pad=lambda x:x+"="*(-len(x)%4); h,p,_=sys.argv[1].split("."); print(json.loads(base64.urlsafe_b64decode(pad(h)))); print(json.loads(base64.urlsafe_b64decode(pad(p))))' "<token>"
 ```
+
+Sending any forged or modified token (alg:none, weak-secret signature,
+RS/HS confusion) requires gateway approval first; the approval carries the
+exact token you will send.
 
 ## Proving it
 

@@ -11,8 +11,15 @@ webhooks, importers, PDF generators, preview features.
 
 ## Method
 
-1. Point the feature at a server you control or a well-known public
-   endpoint and see if the fetch happens (response content or callback).
+Sandbox honesty: this sandbox's egress is allowlisted; external
+collaborator hosts and the target's internal network are not directly
+reachable from here. Treat internal-target techniques as documentation and
+gateway-gated attempts, and grade findings for the deployment context.
+
+1. Point the feature at a URL you control the meaning of (in this setup, a
+   distinct local origin such as http://127.0.0.1:9999/tsmarker as the
+   attacker-chosen stand-in) and see if the fetch happens (response content
+   or an observable side effect).
 2. Internal targeting (metadata endpoints, localhost services, internal
    hostnames) is intrusive against the target's infrastructure: gateway
    approval before probing internal addresses.
@@ -24,9 +31,9 @@ webhooks, importers, PDF generators, preview features.
 ## Probes
 
 ```sh
-# does the server fetch? (your own endpoint or a public one)
+# does the server fetch an attacker-chosen URL? (local stand-in origin)
 curl -s -X POST http://localhost:3000/profile/image -H 'content-type: application/json' \
-  -d '{"url":"https://example.com/tsmarker.png"}'
+  -d '{"url":"http://127.0.0.1:9999/tsmarker.png"}'
 
 # internal probing requires approval; typical shape after approval:
 curl -s -X POST http://localhost:3000/profile/image -H 'content-type: application/json' \

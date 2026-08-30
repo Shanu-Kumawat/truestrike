@@ -17,10 +17,14 @@ every transition between user roles.
    profiles, baskets, memories, feedback). A 200 with B's data is the bug.
 3. Vertical: as a normal user, request admin surfaces directly by URL;
    forced browsing is read-only until state changes.
-4. Mass assignment: on profile or registration updates, add privilege
-   fields (role, isAdmin) and see if they stick.
+4. Mass assignment: adding privilege fields (role, isAdmin) to an update
+   is a state-changing privilege-escalation attempt: gateway approval
+   first.
 5. State-changing IDOR (deleting or modifying B's object as A) is
    intrusive: gateway approval first, and use your own accounts.
+
+Reads with your own two accounts (steps 2-3) are ungated; every write or
+privilege mutation goes through the gateway.
 
 ## Probes
 
@@ -31,6 +35,11 @@ curl -s http://localhost:3000/rest/basket/2 -H "Authorization: Bearer <A-token>"
 # vertical: forced browse to admin surface as normal user
 curl -s http://localhost:3000/api/Users -H "Authorization: Bearer <A-token>"
 
+```
+
+Gateway payload (approval carries the exact request):
+
+```sh
 # mass assignment attempt
 curl -s -X PATCH http://localhost:3000/api/Users/1 -H 'content-type: application/json' \
   -H "Authorization: Bearer <A-token>" -d '{"role":"admin"}'

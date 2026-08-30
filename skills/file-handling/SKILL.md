@@ -11,26 +11,35 @@ features, and static file servers.
 
 ## Method
 
+Boundary: existence checks (does a path 200 vs 403?) and uploading a
+benign file exactly as the feature intends are ungated. Retrieving content
+the filter should block, any traversal read, any crafted or hostile upload,
+and any execution attempt extract data or write attacker content: gateway
+approval first.
+
 1. Upload surface: what extensions and content types are accepted, where
    files land (guessable URLs?), are they served back as content or
    executed, is content-type/sniffing controlled?
 2. Filter bypass on extension: double extensions, case, trailing spaces,
-   null bytes (encoded %2500 on double-decoding servers), less-common but
-   executable forms. Retrieving a filtered file type IS a broken access
-   control finding even without executing anything.
+   null bytes (encoded %2500 on double-decoding servers). Retrieving a
+   filtered file type IS a broken access control finding, and the
+   retrieval itself needs gateway approval.
 3. Path traversal in download params: encoded dot-dot segments; aim at a
-   known file first.
+   known file first. Gateway approval (it reads files out of bounds).
 4. Execution risk: uploading active content and having it execute is
-   intrusive; gateway approval before any execution attempt. Retrieving a
-   file that the filter should block is a read-only proof.
+   intrusive; gateway approval before any execution attempt.
 
 ## Probes
 
 ```sh
-# upload accept (benign)
+# upload accept (benign, feature-intended)
 curl -s -X POST http://localhost:3000/file-upload -F "file=@note.txt"
+```
 
-# extension-filter bypass (retrieval proof)
+Gateway payloads (approval carries the exact URL or file):
+
+```sh
+# extension-filter bypass retrieval
 curl -s -o /dev/null -w '%{http_code}\n' \
   "http://localhost:3000/ftp/package.json.bak%2500.md"
 curl -s "http://localhost:3000/ftp/suspicious_errors.yml%2500.md" | head

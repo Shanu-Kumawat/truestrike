@@ -11,19 +11,24 @@ webhooks.
 - Endpoints accepting filenames, URLs, or format arguments.
 - Legacy utilities exposing network diagnostics.
 
-## Method (read-only first)
+## Method
 
-1. Time-based detection is the quietest oracle: a separator plus a delay
-   command (`;sleep 5`, `|sleep 5`, backtick variants) and diff response
-   times against baseline.
-2. Separator probing: try `;`, `|`, `&&`, `\n`, backticks; some survive
+Every command-injection payload attempts target-side command execution, and
+delay payloads degrade target responsiveness: ALL payload transmission is
+gateway territory, including single sleep or echo probes. Ungated work is
+passive only: malformed input whose error messages reveal shell syntax, and
+mapping the feature. When approved:
+
+1. Time oracle: separator plus a delay command, diffed against baseline
+   timings.
+2. Separator probing: `;`, `|`, `&&`, newline, backticks; some survive
    filtering.
-3. Output-based proof: separator plus an echo of a unique marker, then grep
-   the response for the marker.
-4. Blind without output: out-of-band via a DNS or HTTP callback you control
-   is intrusive; gateway approval first.
+3. Output proof: separator plus an echo of a unique marker, grepped from
+   the response.
+4. Blind without output: out-of-band via a callback you control; also
+   gateway territory.
 
-## Probes
+## Probes (each sent only after gateway approval)
 
 ```sh
 # time oracle pair
@@ -34,8 +39,8 @@ time curl -s "http://localhost:3000/some/convert?file=a" -o /dev/null
 curl -s "http://localhost:3000/some/convert?file=a;echo+tsmarker" | grep tsmarker
 ```
 
-Running anything beyond sleep/echo against the target, reading files via the
-injection, or OOB callbacks: intrusive, gateway approval required.
+The probes above are the approval payloads: the exact command string goes
+into the request_intrusive_approval call before anything is sent.
 
 ## Proving it
 

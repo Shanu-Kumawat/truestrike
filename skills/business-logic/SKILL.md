@@ -13,6 +13,12 @@ and checkout.
 
 ## Method
 
+Boundary: normal app usage with your own account (registering, browsing,
+adding fairly-priced items to your own basket, checking out) is ungated -
+you are just a user. The ABUSIVE variant of any mutation (tampered values,
+replays, negative quantities) is a state-changing attack: gateway approval
+first, including sequential ones.
+
 1. Map the flow end to end as a normal user; record every state transition
    and where trust boundaries sit (does the server recompute totals?).
 2. Numeric abuse: negative quantities, zero, huge values, floats with
@@ -21,11 +27,11 @@ and checkout.
 4. Coupon abuse: reuse, cross-user, stack, expired, wrong-case; invalid
    discount codes with format quirks.
 5. Race conditions: submitting the same coupon or checkout twice in
-   parallel. Parallel writes are intrusive: gateway approval first.
+   parallel; gateway approval (like every abusive mutation).
 6. Workflow bypass: skip steps, replay step 3 twice, complete flow out of
    order.
 
-## Probes
+## Probes (gateway payloads; approval carries the exact request)
 
 ```sh
 # negative quantity
@@ -33,7 +39,7 @@ curl -s -X POST http://localhost:3000/api/BasketItems -H 'content-type: applicat
   -H "Authorization: Bearer <token>" \
   -d '{"BasketId":"1","ProductId":"1","quantity":-5}'
 
-# coupon reuse (sequential; parallel replay needs approval)
+# coupon reuse
 curl -s -X PUT http://localhost:3000/rest/basket/1/coupon/<CODE> -H "Authorization: Bearer <token>"
 curl -s -X PUT http://localhost:3000/rest/basket/1/coupon/<CODE> -H "Authorization: Bearer <token>"
 ```
