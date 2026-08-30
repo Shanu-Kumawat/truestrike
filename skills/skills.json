@@ -1,0 +1,76 @@
+{
+  "skills": [
+    {
+      "name": "web-recon",
+      "description": "TrueStrike process skill: five-step single-target attack-surface mapping with safe-flag tool recipes and evidence capture. Read first at scan start."
+    },
+    {
+      "name": "vuln-validation",
+      "description": "TrueStrike process skill: PoC discipline - one hypothesis at a time, read-only first, counterevidence, and the mandatory exploit-gateway flow for intrusive steps."
+    },
+    {
+      "name": "report-writing",
+      "description": "TrueStrike process skill: report structure, findings.json rules, severity calibration, and the artifact contract for pentest_report.md and findings.json."
+    },
+    {
+      "name": "sql-injection",
+      "description": "SQL injection reference: quote-breaking, boolean/UNION oracles, column-count discovery, read-only probes, sqlmap-behind-approval, false positives."
+    },
+    {
+      "name": "xss",
+      "description": "Cross-site scripting reference: reflection-context mapping, stored persistence proof, DOM sink tracing, encoding and CSP counterchecks."
+    },
+    {
+      "name": "command-injection",
+      "description": "OS command injection reference: separator probing, time and output oracles, OOB behind the gateway, what separates probable from confirmed."
+    },
+    {
+      "name": "authentication-bypass",
+      "description": "Authentication reference: enumeration oracles, default credentials, password-reset abuse, session flaw checks, brute-force gating rules."
+    },
+    {
+      "name": "jwt-and-token-security",
+      "description": "JWT reference: offline decoding, alg:none, weak HMAC secrets, RS/HS confusion with published keys, claim-trust checks, approval boundaries."
+    },
+    {
+      "name": "access-control",
+      "description": "Access control reference: horizontal IDOR with two accounts, forced browsing, mass assignment, and how to prove privilege actually escalated."
+    },
+    {
+      "name": "business-logic",
+      "description": "Business logic reference: negative quantities, price tampering, coupon abuse, workflow bypass, race conditions behind the gateway."
+    },
+    {
+      "name": "information-disclosure",
+      "description": "Information disclosure reference: error induction, backup and config probing, API over-fetch diffing, source maps, severity by leaked content."
+    },
+    {
+      "name": "file-handling",
+      "description": "File handling reference: upload surface mapping, extension-filter bypass proofs, path traversal, execution-risk approval boundaries."
+    },
+    {
+      "name": "ssrf",
+      "description": "SSRF reference: URL-parameter recognition, controlled-callback proof, internal probing behind the gateway, blind oracles."
+    },
+    {
+      "name": "csrf",
+      "description": "CSRF reference: cookie/SameSite checks, token validation tests, PoC construction and execution behind the gateway."
+    },
+    {
+      "name": "open-redirect",
+      "description": "Open redirect reference: Location-header and client-side variants, scheme-relative bypasses, impact framing."
+    },
+    {
+      "name": "cors-misconfiguration",
+      "description": "CORS reference: origin-reflection probes, credential pairing, allowlist suffix tricks, impact proof boundaries."
+    },
+    {
+      "name": "client-side-vulnerabilities",
+      "description": "Client-side reference: DOM XSS sink tracing, prototype pollution with gadget proof, client-only enforcement bypasses."
+    },
+    {
+      "name": "dependency-exposure",
+      "description": "Dependency exposure reference: version harvesting, advisory mapping without fabrication, nuclei as hypothesis generator, probable-vs-confirmed rules."
+    }
+  ]
+}
