@@ -7,7 +7,7 @@ import {
 import type { TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
-import { loadConfig, loadDotEnv } from './config.js';
+import { loadConfig, loadDotEnv, resolveSkills } from './config.js';
 import type { TrueStrikeConfig } from './config.js';
 import { buildScanSpec } from './agent/spec.js';
 import { buildApprovalInput, collectPendingCalls, describePendingCall } from './agent/approvals.js';
@@ -444,12 +444,18 @@ export async function runScan(
   console.log(`Connecting to TrueForge at ${config.baseUrl} (model: ${config.model})\n`);
 
   const startedAtIso = new Date().toISOString();
+  const { data: configuredSkills } = await client.skills.list();
+  const skills = resolveSkills(
+    config.skills,
+    (configuredSkills ?? []).map((skill) => skill.name),
+  );
+
   const { data: session } = await client.sessions.create({
     agent: {
       spec: buildScanSpec(target, {
         model: config.model,
         mcpServers: config.mcpServers,
-        skills: config.skills,
+        skills,
       }),
     },
   });

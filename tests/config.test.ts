@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SKILLS, loadConfig } from '../src/config.js';
+import { ALL_CONFIGURED_SKILLS, loadConfig, resolveSkills } from '../src/config.js';
 
 function env(overrides: Record<string, string>): NodeJS.ProcessEnv {
   return { ...overrides };
 }
+
+describe('resolveSkills', () => {
+  it('expands * to every configured skill, sorted', () => {
+    expect(resolveSkills([ALL_CONFIGURED_SKILLS], ['xss', 'web-recon', 'sql-injection'])).toEqual([
+      'sql-injection',
+      'web-recon',
+      'xss',
+    ]);
+  });
+
+  it('passes explicit lists through untouched', () => {
+    expect(resolveSkills(['web-recon'], ['web-recon', 'xss'])).toEqual(['web-recon']);
+    expect(resolveSkills([], ['web-recon'])).toEqual([]);
+  });
+});
 
 describe('loadConfig', () => {
   it('throws an actionable error when TRUESTRIKE_MODEL is missing', () => {
@@ -17,7 +32,7 @@ describe('loadConfig', () => {
     expect(config.extraAllowedHosts).toEqual([]);
     expect(config.mcpServers).toEqual([]);
     expect(config.auditLogPath).toBe('.truestrike/audit.jsonl');
-    expect(config.skills).toEqual(DEFAULT_SKILLS);
+    expect(config.skills).toEqual([ALL_CONFIGURED_SKILLS]);
   });
 
   it('parses comma-separated allowlist and mcp server lists', () => {

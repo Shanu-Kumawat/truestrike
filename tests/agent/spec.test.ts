@@ -53,6 +53,12 @@ describe('buildScanSpec', () => {
     ]);
   });
 
+  it('teaches the library-first principle and keeps skills a floor, not a boundary', () => {
+    expect(spec.instructions).toMatch(/instead of guessing payloads/i);
+    expect(spec.instructions).toMatch(/depth, not a boundary/i);
+    expect(spec.instructions).toMatch(/An uncovered[\s\S]+surface is a surface to test/i);
+  });
+
   it('instructs the agent to emit a sandbox_artifacts block for the report files', () => {
     expect(spec.instructions).toMatch(/sandbox_artifacts/);
     expect(spec.instructions).toContain(

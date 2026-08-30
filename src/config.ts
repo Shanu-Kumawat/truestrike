@@ -18,8 +18,25 @@ export interface TrueStrikeConfig {
 /**
  * Default TrueStrike skill packs (configured in TrueForge from skills/ in
  * this repo). TRUESTRIKE_SKILLS overrides the list; empty disables skills.
+ * The special value '*' (the default) attaches every skill configured on
+ * the TrueForge server at scan time, so newly added packs apply without
+ * config changes.
  */
 export const DEFAULT_SKILLS = ['web-recon', 'vuln-validation', 'report-writing'];
+
+export const ALL_CONFIGURED_SKILLS = '*';
+
+/**
+ * Resolves the requested skill list against the skills configured on the
+ * TrueForge server: '*' expands to every configured skill name; any other
+ * list is used as-is (the server rejects unknown names at session creation).
+ */
+export function resolveSkills(requested: string[], configuredNames: string[]): string[] {
+  if (requested.length === 1 && requested[0] === ALL_CONFIGURED_SKILLS) {
+    return [...configuredNames].sort();
+  }
+  return requested;
+}
 
 /**
  * Loads `.env` from cwd when present. Missing file is fine.
@@ -60,7 +77,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TrueStrikeConf
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
-    skills: (env.TRUESTRIKE_SKILLS ?? DEFAULT_SKILLS.join(','))
+    skills: (env.TRUESTRIKE_SKILLS ?? ALL_CONFIGURED_SKILLS)
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
