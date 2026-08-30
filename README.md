@@ -83,6 +83,11 @@ pnpm truestrike gateway       # approval-gated MCP server (keep running)
 #   "truestrike-gateway", then set in .env:
 #   TRUESTRIKE_MCP_SERVERS=truestrike-gateway
 
+# optional: register the saved "truestrike" agent so it shows up in
+# TrueForge's Agents Library UI (same spec as the CLI scans; re-run when
+# the relay URL changes):
+#   TRUESTRIKE_MODEL=<model> pnpm tsx scripts/register-ui-agent.mts <demo-url>
+
 pnpm truestrike scan <demo-url>
 pnpm truestrike scan --resume # after a crash or disconnect
 ```
