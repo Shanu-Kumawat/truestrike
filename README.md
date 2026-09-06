@@ -13,6 +13,10 @@ Built for the WeMakeDevs Agent Harness Hackathon (Aug 2026). Docs: [project](doc
 [architecture](docs/architecture.md) · [demo target](docs/demo-target.md) ·
 [review discipline](docs/qodo-workflow.md)
 
+## Demo
+
+[![TrueStrike demo video](https://img.youtube.com/vi/XAN7FGiFV9k/hqdefault.jpg)](https://www.youtube.com/watch?v=XAN7FGiFV9k)
+
 ## What a scan actually does
 
 A real engagement against the local [OWASP Juice Shop](docs/demo-target.md)
